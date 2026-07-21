@@ -2,8 +2,8 @@
 
 ArcanaGraph is the repository-graph foundation of the [**Warlock Toolchain**](https://github.com/Lokee86/warlock-toolchain).
 It models repositories as queryable graphs and provides the storage, snapshot,
-and traversal foundations used by higher-level Warlock tools such as Demon Docs
-and Grimoire Context.
+and traversal foundations used by higher-level Warlock tools such as Demon Docs,
+Grimoire Context, and Pitlord.
 
 ## Ownership boundaries
 
@@ -84,13 +84,33 @@ the same logical dataset checksum as the packed format and is opened read-only
 after identity, integrity, metadata, edge-count, endpoint, and checksum
 validation.
 
+## Benchmarks
+
+The benchmark harness generates one deterministic dataset, gives both backends
+identical query sequences, alternates backend order across samples, and rejects
+any packed/SQLite result mismatch. It records immutable build time, fully
+validated reopen time, warm in-process query throughput, and file size.
+
+```text
+cargo run --release -- benchmark \
+  --tier small \
+  --topology modular \
+  --queries 10000 \
+  --samples 3 \
+  --csv target/benchmarks/small-modular.csv
+```
+
+Supported tiers are `small`, `medium`, `large`, and `stress`. Supported
+synthetic topologies are `modular`, `entangled`, `hub-heavy`, `layered`, and
+`dense-subsystem`. These baseline query measurements are intentionally labeled
+warm; separate-process cold-cache measurement remains future work.
+
 ## Next implementation steps
 
-1. Define shared deterministic query workloads.
-2. Add cold-build, reopen, query, mutation, and disk-size benchmarks.
+1. Add separate-process cold and mixed-cache benchmark modes.
+2. Add mutation, overlay, and compaction benchmarks.
 3. Measure ordinary buffered reads before introducing memory mapping.
-4. Add packed overlays and compaction only after the baseline comparison.
-5. Validate synthetic results against captured Demon Docs and Space Rocks
+4. Validate synthetic results against captured Demon Docs and Space Rocks
    repository graphs.
 
 ## Development

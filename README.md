@@ -1,9 +1,9 @@
 # ArcanaGraph
 
-ArcanaGraph is the repository-graph foundation of the **Warlock toolchain**.
+ArcanaGraph is the repository-graph foundation of the [**Warlock Toolchain**](https://github.com/Lokee86/warlock-toolchain).
 It models repositories as queryable graphs and provides the storage, snapshot,
 and traversal foundations used by higher-level Warlock tools such as Demon Docs
-and Context Grimoire.
+and Grimoire Context.
 
 ## Ownership boundaries
 
@@ -12,7 +12,7 @@ and Context Grimoire.
 - **Demon Docs** owns documentation semantics, policy, review history, and
   Codemap decisions. It consumes ArcanaGraph facts without owning the graph
   engine.
-- **Context Grimoire** owns task interpretation, relevance ranking, token
+- **Grimoire Context** owns task interpretation, relevance ranking, token
   budgets, and final context construction. It queries ArcanaGraph and Demon
   Docs without becoming either system's storage layer.
 
@@ -104,3 +104,7 @@ cargo test --all-targets
 cargo run -- --help
 cargo run -- --version
 ```
+
+## License
+
+ArcanaGraph is available under the [MIT License](LICENSE.md).

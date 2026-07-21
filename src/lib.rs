@@ -1,8 +1,9 @@
 //! Reusable library boundary for ArcanaGraph.
 //!
-//! Graph modeling and storage are intentionally out of scope for this initial
-//! foundation. Future repository-graph implementations should be exposed from
-//! this crate rather than coupled to the `arcana` command-line binary.
+//! Synthetic workloads and future graph-storage implementations are exposed
+//! from this crate rather than coupled to the `arcana` command-line binary.
+
+pub mod synthetic;
 
 /// Product name presented by the ArcanaGraph library and CLI.
 pub const PROJECT_NAME: &str = "ArcanaGraph";

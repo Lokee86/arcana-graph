@@ -1,8 +1,9 @@
 # ArcanaGraph
 
-ArcanaGraph is an independent repository-graph project. Its role is to model
-repositories as a queryable graph and to provide the storage and snapshot
-foundations needed to inspect repository structure and relationships.
+ArcanaGraph is the repository-graph foundation of the **Warlock toolchain**.
+It models repositories as queryable graphs and provides the storage, snapshot,
+and traversal foundations used by higher-level Warlock tools such as Demon Docs
+and Context Grimoire.
 
 ## Ownership boundaries
 

@@ -5,6 +5,7 @@ mod error;
 mod format;
 mod oracle;
 mod reader;
+mod sqlite;
 mod writer;
 
 #[cfg(test)]
@@ -15,6 +16,7 @@ mod tests;
 pub use error::{DatasetError, Direction, PackedError, QueryError};
 pub use oracle::InMemoryGraph;
 pub use reader::PackedGraph;
+pub use sqlite::{SqliteError, SqliteGraph, SqliteWriteSummary, write_sqlite};
 pub use writer::{WriteSummary, write_packed};
 
 use crate::synthetic::{EdgeKind, NodeId};

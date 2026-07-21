@@ -74,12 +74,21 @@ adjacency ordering. Queries read directly from the packed byte buffer without
 rebuilding an in-memory graph. A separate in-memory implementation provides the
 correctness oracle used by round-trip tests.
 
+## SQLite reference backend
+
+The control backend stores the same canonical graph in a conventional SQLite
+schema. Forward traversal uses the `(source, target, kind)` primary key and
+reverse traversal uses an index on `(target, source, kind)`. The database keeps
+the same logical dataset checksum as the packed format and is opened read-only
+after identity, integrity, metadata, edge-count, endpoint, and checksum
+validation.
+
 ## Next implementation steps
 
-1. Implement the equivalent SQLite reference backend.
-2. Define shared deterministic query workloads.
-3. Add cold-build, reopen, query, mutation, overlay, and compaction benchmarks.
-4. Evaluate ordinary buffered reads before introducing memory mapping.
+1. Define shared deterministic query workloads.
+2. Add cold-build, reopen, query, mutation, and disk-size benchmarks.
+3. Measure ordinary buffered reads before introducing memory mapping.
+4. Add packed overlays and compaction only after the baseline comparison.
 5. Validate synthetic results against captured Demon Docs and Space Rocks
    repository graphs.
 

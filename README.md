@@ -75,6 +75,25 @@ adjacency ordering. Queries read directly from the packed byte buffer without
 rebuilding an in-memory graph. A separate in-memory implementation provides the
 correctness oracle used by round-trip tests.
 
+## Snapshots and overlays
+
+ArcanaGraph snapshots are immutable compositions rather than mutable graph
+files. A snapshot manifest identifies one validated packed base plus an optional
+immutable overlay. The manifest is published last, so readers never observe a
+partially assembled snapshot.
+
+Overlay v1 stores canonical added edges and removed-edge tombstones bound to the
+exact node count, edge count, and dataset checksum of its packed base. Opening a
+snapshot validates the base, overlay, manifest identities, visible edge count,
+and visible dataset checksum before queries are allowed. Forward and reverse
+queries merge the base adjacency with small in-memory overlay indexes without
+rewriting the packed base.
+
+Snapshot and overlay files are content-identifiable and refuse in-place
+replacement. `compact_snapshot` materializes the visible graph into a new packed
+base, verifies its edge count and checksum, and publishes a new base-only
+manifest last. The source snapshot remains untouched.
+
 ## SQLite reference backend
 
 The control backend stores the same canonical graph in a conventional SQLite
@@ -105,13 +124,34 @@ synthetic topologies are `modular`, `entangled`, `hub-heavy`, `layered`, and
 `dense-subsystem`. These baseline query measurements are intentionally labeled
 warm; separate-process cold-cache measurement remains future work.
 
+Mutation benchmarks compare immutable overlays against rebuilding a complete
+packed replacement while treating the existing packed base as shared storage:
+
+```text
+cargo run --release -- benchmark-mutations \
+  --tier small \
+  --topology modular \
+  --queries 10000 \
+  --samples 3 \
+  --csv target/benchmarks/small-modular-mutations.csv
+```
+
+The five mutation workloads cover one hot node, a local range, scattered
+changes, hub-focused changes, and one percent of all edges. Each run measures
+creation, fully validated reopen, warm forward/reverse queries, and incremental
+file size. Overlay and rebuilt-packed results must produce identical visible
+graph checksums and query fingerprints.
+
 ## Next implementation steps
 
-1. Add separate-process cold and mixed-cache benchmark modes.
-2. Add mutation, overlay, and compaction benchmarks.
-3. Measure ordinary buffered reads before introducing memory mapping.
-4. Validate synthetic results against captured Demon Docs and Space Rocks
-   repository graphs.
+1. Validate mutation and compaction policy against captured Demon Docs and
+   Space Rocks repository graphs.
+2. Define compaction triggers from overlay size, mutation rate, reopen frequency,
+   and expected query mix rather than one fixed percentage.
+3. Add separate-process cold and mixed-cache benchmark modes.
+4. Stream compaction directly into the packed writer if materialization becomes
+   a measured memory bottleneck.
+5. Measure ordinary buffered reads before introducing memory mapping.
 
 ## Development
 

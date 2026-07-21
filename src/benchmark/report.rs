@@ -1,13 +1,16 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
 
 use super::error::BenchmarkError;
 
-/// The storage backend used for one benchmark sample.
+/// The storage representation used for one benchmark sample.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Backend {
     Packed,
     Sqlite,
+    Overlay,
+    RebuiltPacked,
 }
 
 impl fmt::Display for Backend {
@@ -15,6 +18,8 @@ impl fmt::Display for Backend {
         formatter.write_str(match self {
             Self::Packed => "packed",
             Self::Sqlite => "sqlite",
+            Self::Overlay => "overlay",
+            Self::RebuiltPacked => "rebuilt-packed",
         })
     }
 }
@@ -147,26 +152,26 @@ impl BenchmarkReport {
 
         let mut summary = String::new();
         for (graph, workload, metric) in groups {
-            let samples = self.samples.iter().filter(|sample| {
+            let mut backends: BTreeMap<Backend, Vec<&BenchmarkSample>> = BTreeMap::new();
+            for sample in self.samples.iter().filter(|sample| {
                 sample.graph == graph && sample.workload == workload && sample.metric == metric
-            });
-            let mut packed = Vec::new();
-            let mut sqlite = Vec::new();
-            for sample in samples {
-                match sample.backend {
-                    Backend::Packed => packed.push(sample),
-                    Backend::Sqlite => sqlite.push(sample),
-                }
+            }) {
+                backends.entry(sample.backend).or_default().push(sample);
             }
 
             summary.push_str(&format!("{graph}/{workload}/{metric}:"));
-            append_median_timing(&mut summary, "packed", &packed);
-            append_median_timing(&mut summary, "sqlite", &sqlite);
-            append_speedup(&mut summary, &packed, &sqlite);
-            append_file_sizes(&mut summary, &packed, &sqlite);
+            for (backend, samples) in &backends {
+                append_median_timing(&mut summary, *backend, samples);
+            }
+            let paired = backends.values().collect::<Vec<_>>();
+            if let [first, second] = paired.as_slice() {
+                append_speedup(&mut summary, first, second);
+            }
+            append_file_sizes(&mut summary, &backends);
             if metric == BenchmarkMetric::Query {
-                append_throughput(&mut summary, "packed", &packed);
-                append_throughput(&mut summary, "sqlite", &sqlite);
+                for (backend, samples) in &backends {
+                    append_throughput(&mut summary, *backend, samples);
+                }
             }
             summary.push('\n');
         }
@@ -205,7 +210,7 @@ fn median(values: &mut [u128]) -> Option<u128> {
     }
 }
 
-fn append_median_timing(summary: &mut String, backend: &str, samples: &[&BenchmarkSample]) {
+fn append_median_timing(summary: &mut String, backend: Backend, samples: &[&BenchmarkSample]) {
     let mut durations = samples
         .iter()
         .filter_map(|sample| {
@@ -218,54 +223,43 @@ fn append_median_timing(summary: &mut String, backend: &str, samples: &[&Benchma
     }
 }
 
-fn append_speedup(summary: &mut String, packed: &[&BenchmarkSample], sqlite: &[&BenchmarkSample]) {
-    let mut packed_durations = packed
-        .iter()
-        .filter_map(|sample| {
-            let duration = sample.duration.as_nanos();
-            (duration > 0).then_some(duration)
-        })
-        .collect::<Vec<_>>();
-    let mut sqlite_durations = sqlite
-        .iter()
-        .filter_map(|sample| {
-            let duration = sample.duration.as_nanos();
-            (duration > 0).then_some(duration)
-        })
-        .collect::<Vec<_>>();
-    if let (Some(packed), Some(sqlite)) =
-        (median(&mut packed_durations), median(&mut sqlite_durations))
-        && packed > 0
+fn append_speedup(summary: &mut String, first: &[&BenchmarkSample], second: &[&BenchmarkSample]) {
+    let mut first_durations = durations(first);
+    let mut second_durations = durations(second);
+    if let (Some(first), Some(second)) =
+        (median(&mut first_durations), median(&mut second_durations))
+        && first > 0
     {
-        summary.push_str(&format!(" speedup {:.2}x", sqlite as f64 / packed as f64));
+        summary.push_str(&format!(" speedup {:.2}x", second as f64 / first as f64));
     }
 }
 
-fn append_file_sizes(
-    summary: &mut String,
-    packed: &[&BenchmarkSample],
-    sqlite: &[&BenchmarkSample],
-) {
-    let mut packed_sizes = packed
+fn durations(samples: &[&BenchmarkSample]) -> Vec<u128> {
+    samples
         .iter()
-        .map(|sample| u128::from(sample.file_size))
-        .collect::<Vec<_>>();
-    let mut sqlite_sizes = sqlite
-        .iter()
-        .map(|sample| u128::from(sample.file_size))
-        .collect::<Vec<_>>();
-    let packed_size = median(&mut packed_sizes);
-    let sqlite_size = median(&mut sqlite_sizes);
-    if packed_size.is_some() || sqlite_size.is_some() {
-        summary.push_str(&format!(
-            " file_size packed={}B sqlite={}B",
-            packed_size.map_or_else(|| "-".to_owned(), |size| size.to_string()),
-            sqlite_size.map_or_else(|| "-".to_owned(), |size| size.to_string())
-        ));
+        .filter_map(|sample| {
+            let duration = sample.duration.as_nanos();
+            (duration > 0).then_some(duration)
+        })
+        .collect()
+}
+
+fn append_file_sizes(summary: &mut String, backends: &BTreeMap<Backend, Vec<&BenchmarkSample>>) {
+    if backends.is_empty() {
+        return;
+    }
+    summary.push_str(" file_size");
+    for (backend, samples) in backends {
+        let mut sizes = samples
+            .iter()
+            .map(|sample| u128::from(sample.file_size))
+            .collect::<Vec<_>>();
+        let size = median(&mut sizes).map_or_else(|| "-".to_owned(), |value| value.to_string());
+        summary.push_str(&format!(" {backend}={size}B"));
     }
 }
 
-fn append_throughput(summary: &mut String, backend: &str, samples: &[&BenchmarkSample]) {
+fn append_throughput(summary: &mut String, backend: Backend, samples: &[&BenchmarkSample]) {
     let mut throughputs = samples
         .iter()
         .filter_map(|sample| {

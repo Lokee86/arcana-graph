@@ -29,6 +29,11 @@ pub(super) fn run_backend(
             let summary = write_sqlite(path, dataset)?;
             (summary.node_count, summary.edge_count, summary.file_len)
         }
+        Backend::Overlay | Backend::RebuiltPacked => {
+            return Err(BenchmarkError::InvalidConfig(
+                "packed/SQLite runner received a mutation backend",
+            ));
+        }
     };
     report.push(BenchmarkSample::new(
         graph_name,
@@ -47,6 +52,11 @@ pub(super) fn run_backend(
     let graph = match backend {
         Backend::Packed => BackendGraph::Packed(PackedGraph::open(path)?),
         Backend::Sqlite => BackendGraph::Sqlite(SqliteGraph::open(path)?),
+        Backend::Overlay | Backend::RebuiltPacked => {
+            return Err(BenchmarkError::InvalidConfig(
+                "packed/SQLite runner received a mutation backend",
+            ));
+        }
     };
     report.push(BenchmarkSample::new(
         graph_name,

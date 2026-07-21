@@ -1,8 +1,9 @@
 use std::fmt;
 use std::io;
 
+use crate::snapshot::{OverlayError, SnapshotError};
 use crate::storage::{PackedError, QueryError, SqliteError};
-use crate::synthetic::GraphSpecError;
+use crate::synthetic::{GraphSpecError, MutationError};
 
 use super::workload::QueryWorkloadError;
 
@@ -15,7 +16,18 @@ pub enum BenchmarkError {
     Query(QueryError),
     Packed(PackedError),
     Sqlite(SqliteError),
+    Overlay(OverlayError),
+    Snapshot(SnapshotError),
+    Mutation(MutationError),
     InvalidConfig(&'static str),
+    MutationMismatch {
+        sample: u32,
+        workload: String,
+        overlay_items: u64,
+        rebuilt_items: u64,
+        overlay_fingerprint: u64,
+        rebuilt_fingerprint: u64,
+    },
     BackendMismatch {
         sample: u32,
         workload: String,
@@ -35,7 +47,23 @@ impl fmt::Display for BenchmarkError {
             Self::Query(error) => error.fmt(formatter),
             Self::Packed(error) => error.fmt(formatter),
             Self::Sqlite(error) => error.fmt(formatter),
+            Self::Overlay(error) => error.fmt(formatter),
+            Self::Snapshot(error) => error.fmt(formatter),
+            Self::Mutation(error) => error.fmt(formatter),
             Self::InvalidConfig(message) => formatter.write_str(message),
+            Self::MutationMismatch {
+                sample,
+                workload,
+                overlay_items,
+                rebuilt_items,
+                overlay_fingerprint,
+                rebuilt_fingerprint,
+            } => write!(
+                formatter,
+                "mutation mismatch in sample {sample} workload {workload}: \
+                 overlay items={overlay_items} fingerprint={overlay_fingerprint:#x}; \
+                 rebuilt packed items={rebuilt_items} fingerprint={rebuilt_fingerprint:#x}"
+            ),
             Self::BackendMismatch {
                 sample,
                 workload,
@@ -62,7 +90,12 @@ impl std::error::Error for BenchmarkError {
             Self::Query(error) => Some(error),
             Self::Packed(error) => Some(error),
             Self::Sqlite(error) => Some(error),
-            Self::InvalidConfig(_) | Self::BackendMismatch { .. } => None,
+            Self::Overlay(error) => Some(error),
+            Self::Snapshot(error) => Some(error),
+            Self::Mutation(error) => Some(error),
+            Self::InvalidConfig(_)
+            | Self::MutationMismatch { .. }
+            | Self::BackendMismatch { .. } => None,
         }
     }
 }
@@ -100,5 +133,23 @@ impl From<PackedError> for BenchmarkError {
 impl From<SqliteError> for BenchmarkError {
     fn from(error: SqliteError) -> Self {
         Self::Sqlite(error)
+    }
+}
+
+impl From<OverlayError> for BenchmarkError {
+    fn from(error: OverlayError) -> Self {
+        Self::Overlay(error)
+    }
+}
+
+impl From<SnapshotError> for BenchmarkError {
+    fn from(error: SnapshotError) -> Self {
+        Self::Snapshot(error)
+    }
+}
+
+impl From<MutationError> for BenchmarkError {
+    fn from(error: MutationError) -> Self {
+        Self::Mutation(error)
     }
 }

@@ -5,6 +5,10 @@ mod cli;
 #[cfg(test)]
 mod cli_tests;
 mod error;
+mod mutation_files;
+mod mutation_plan;
+mod mutation_query;
+mod mutation_runner;
 mod report;
 mod runner;
 mod workload;
@@ -12,12 +16,15 @@ mod workload;
 pub use crate::synthetic::{GraphSpec, ScaleTier, Topology};
 pub use cli::{BenchmarkCommand, BenchmarkParseError, benchmark_usage, topology_preset};
 pub use error::BenchmarkError;
+pub use mutation_runner::run_mutation_benchmark;
 pub use report::{Backend, BenchmarkMetric, BenchmarkReport, BenchmarkSample};
 pub use runner::{BenchmarkConfig, run_benchmark};
 pub use workload::{
     QueryDirection, QueryPattern, QueryWorkload, QueryWorkloadError, generate_workload,
 };
 
+#[cfg(test)]
+mod mutation_runner_tests;
 #[cfg(test)]
 mod runner_tests;
 

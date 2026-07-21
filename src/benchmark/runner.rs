@@ -69,6 +69,9 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkReport, Benchm
             let path = match backend {
                 Backend::Packed => &packed_path,
                 Backend::Sqlite => &sqlite_path,
+                Backend::Overlay | Backend::RebuiltPacked => {
+                    unreachable!("standard benchmark order contains only packed and SQLite")
+                }
             };
             let observations = run_backend(
                 backend,
@@ -82,6 +85,9 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkReport, Benchm
             match backend {
                 Backend::Packed => packed = Some(observations),
                 Backend::Sqlite => sqlite = Some(observations),
+                Backend::Overlay | Backend::RebuiltPacked => {
+                    unreachable!("standard benchmark order contains only packed and SQLite")
+                }
             }
         }
         compare_observations(
@@ -93,7 +99,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkReport, Benchm
     Ok(report)
 }
 
-fn validate_config(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
+pub(super) fn validate_config(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
     if config.query_count == 0 {
         return Err(BenchmarkError::InvalidConfig(
             "query_count must be greater than zero",
@@ -108,7 +114,7 @@ fn validate_config(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
     Ok(())
 }
 
-fn shared_workloads(
+pub(super) fn shared_workloads(
     dataset: &GraphDataset,
     query_count: usize,
     seed: u64,
@@ -187,7 +193,7 @@ fn compare_observations(
     Ok(())
 }
 
-fn graph_name(spec: GraphSpec) -> String {
+pub(super) fn graph_name(spec: GraphSpec) -> String {
     let topology = match spec.topology {
         Topology::Modular { .. } => "modular",
         Topology::Entangled { .. } => "entangled",
@@ -205,6 +211,8 @@ fn benchmark_path(work_dir: &Path, run_id: u64, sample: u32, backend: Backend) -
     let extension = match backend {
         Backend::Packed => "pack",
         Backend::Sqlite => "sqlite",
+        Backend::Overlay => "overlay",
+        Backend::RebuiltPacked => "pack",
     };
     work_dir.join(format!(
         "arcana-benchmark-{}-{run_id}-{sample}.{extension}",

@@ -1,16 +1,54 @@
 use std::fmt;
 use std::io;
 
-/// An error while serializing a benchmark report.
+use crate::storage::{PackedError, QueryError, SqliteError};
+use crate::synthetic::GraphSpecError;
+
+use super::workload::QueryWorkloadError;
+
+/// An error while executing or reporting a benchmark.
 #[derive(Debug)]
 pub enum BenchmarkError {
     Io(io::Error),
+    GraphSpec(GraphSpecError),
+    Workload(QueryWorkloadError),
+    Query(QueryError),
+    Packed(PackedError),
+    Sqlite(SqliteError),
+    InvalidConfig(&'static str),
+    BackendMismatch {
+        sample: u32,
+        workload: String,
+        packed_items: u64,
+        sqlite_items: u64,
+        packed_fingerprint: u64,
+        sqlite_fingerprint: u64,
+    },
 }
 
 impl fmt::Display for BenchmarkError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => error.fmt(formatter),
+            Self::GraphSpec(error) => error.fmt(formatter),
+            Self::Workload(error) => error.fmt(formatter),
+            Self::Query(error) => error.fmt(formatter),
+            Self::Packed(error) => error.fmt(formatter),
+            Self::Sqlite(error) => error.fmt(formatter),
+            Self::InvalidConfig(message) => formatter.write_str(message),
+            Self::BackendMismatch {
+                sample,
+                workload,
+                packed_items,
+                sqlite_items,
+                packed_fingerprint,
+                sqlite_fingerprint,
+            } => write!(
+                formatter,
+                "backend mismatch in sample {sample} workload {workload}: \
+                 packed items={packed_items} fingerprint={packed_fingerprint:#x}; \
+                 SQLite items={sqlite_items} fingerprint={sqlite_fingerprint:#x}"
+            ),
         }
     }
 }
@@ -19,6 +57,12 @@ impl std::error::Error for BenchmarkError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
+            Self::GraphSpec(error) => Some(error),
+            Self::Workload(error) => Some(error),
+            Self::Query(error) => Some(error),
+            Self::Packed(error) => Some(error),
+            Self::Sqlite(error) => Some(error),
+            Self::InvalidConfig(_) | Self::BackendMismatch { .. } => None,
         }
     }
 }
@@ -26,5 +70,35 @@ impl std::error::Error for BenchmarkError {
 impl From<io::Error> for BenchmarkError {
     fn from(error: io::Error) -> Self {
         Self::Io(error)
+    }
+}
+
+impl From<GraphSpecError> for BenchmarkError {
+    fn from(error: GraphSpecError) -> Self {
+        Self::GraphSpec(error)
+    }
+}
+
+impl From<QueryWorkloadError> for BenchmarkError {
+    fn from(error: QueryWorkloadError) -> Self {
+        Self::Workload(error)
+    }
+}
+
+impl From<QueryError> for BenchmarkError {
+    fn from(error: QueryError) -> Self {
+        Self::Query(error)
+    }
+}
+
+impl From<PackedError> for BenchmarkError {
+    fn from(error: PackedError) -> Self {
+        Self::Packed(error)
+    }
+}
+
+impl From<SqliteError> for BenchmarkError {
+    fn from(error: SqliteError) -> Self {
+        Self::Sqlite(error)
     }
 }

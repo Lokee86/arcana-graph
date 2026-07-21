@@ -1,14 +1,20 @@
 //! Deterministic graph-storage benchmark workloads and reporting.
 
+mod backend;
 mod error;
 mod report;
+mod runner;
 mod workload;
 
 pub use error::BenchmarkError;
 pub use report::{Backend, BenchmarkMetric, BenchmarkReport, BenchmarkSample};
+pub use runner::{BenchmarkConfig, run_benchmark};
 pub use workload::{
     QueryDirection, QueryPattern, QueryWorkload, QueryWorkloadError, generate_workload,
 };
+
+#[cfg(test)]
+mod runner_tests;
 
 #[cfg(test)]
 mod tests {

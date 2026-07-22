@@ -5,7 +5,7 @@ either source repository.
 
 ## Results
 
-| Repository | Nodes | Edges | Go files | Packages | Call expressions | Resolved direct calls | Unresolved calls | Packed graph | Catalogue | Import time |
+| Repository | Nodes | Edges | Indexed files | Packages | Call expressions | Resolved direct calls | Unresolved calls | Packed graph | Catalogue | Import time |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Demon Docs | 2,871 | 5,964 | 353 | 33 | 14,727 | 3,333 | 11,394 | 117,648 B | 350,220 B | 0.233 s |
 | Space Rocks game server | 4,091 | 7,651 | 528 | 53 | 15,370 | 3,497 | 11,873 | 157,424 B | 591,426 B | 0.263 s |

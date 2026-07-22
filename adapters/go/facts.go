@@ -65,6 +65,7 @@ const (
 	ReasonDynamicTarget   UnresolvedReason = "dynamic-target"
 	ReasonExternalTarget  UnresolvedReason = "external-target"
 	ReasonBuiltinTarget   UnresolvedReason = "builtin-target"
+	ReasonTypeConversion  UnresolvedReason = "type-conversion"
 	ReasonSelfTarget      UnresolvedReason = "self-target"
 )
 

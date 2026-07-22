@@ -73,7 +73,7 @@ func TestCaller(t *testing.T) { helper() }
 	}
 	unresolved := first.Unresolved[0]
 	if unresolved.Expression != "fmt.Println" || unresolved.CandidateNamespace != "fmt" ||
-		unresolved.CandidateName != "Println" || unresolved.Reason != ReasonUnsupportedForm {
+		unresolved.CandidateName != "Println" || unresolved.Reason != ReasonExternalTarget {
 		t.Fatalf("unexpected unresolved fact: %#v", unresolved)
 	}
 	packageKey := hashIdentity("package:example.com/demo:demo")

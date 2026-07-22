@@ -8,6 +8,7 @@ mod fact_file;
 #[cfg(test)]
 mod fact_file_tests;
 mod model;
+mod unresolved;
 
 pub use catalogue::{
     CatalogueEntry, CatalogueError, RepositoryCatalogue, read_catalogue, write_catalogue,
@@ -19,8 +20,9 @@ pub use compiler::{
 pub use fact_file::{FactFileError, encode_facts, parse_facts};
 pub use model::{
     ContentId, EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, RepositoryPathError,
-    SourceSpan, UnresolvedReason, UnresolvedReferenceFact, normalize_repository_path,
+    SourceSpan, normalize_repository_path,
 };
+pub use unresolved::{UnresolvedReason, UnresolvedReferenceFact};
 
 /// The complete set of facts extracted from one repository.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

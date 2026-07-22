@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/printer"
 	"go/token"
@@ -23,29 +24,43 @@ func (s *scanner) parseDeclaration(declaration ast.Decl, pkg packageInfo, path s
 			s.addEdge(pkg.key, key, RelDefines, node.Span)
 		}
 	case *ast.FuncDecl:
-		name := declaration.Name.Name
-		kind := KindFunction
-		identity := "function:" + pkg.importKey + ":" + name
-		if declaration.Recv != nil {
-			kind = KindMethod
-			receiver := receiverName(declaration.Recv)
-			identity = "method:" + pkg.importKey + ":" + receiver + "." + name
-		} else if strings.HasSuffix(path, "_test.go") && strings.HasPrefix(name, "Test") {
-			kind = KindTest
-			identity = "test:" + pkg.importKey + ":" + name
-		}
+		kind, identity := declarationIdentity(pkg.importKey, path, declaration)
 		key := hashIdentity(identity)
-		node := NodeFact{Key: key, Kind: kind, Path: path, Name: name, Span: s.span(declaration.Pos(), declaration.End(), path)}
+		node := NodeFact{Key: key, Kind: kind, Path: path, Name: declaration.Name.Name, Span: s.span(declaration.Pos(), declaration.End(), path)}
 		s.addNode(node)
 		s.addEdge(pkg.key, key, RelDefines, node.Span)
-		if declaration.Recv == nil && declaration.Body != nil {
-			scope := pkg.importKey + "\x00" + pkg.name
-			s.targets[scope] = appendTarget(s.targets[scope], name, key)
+
+		scope := pkg.importKey + "\x00" + pkg.name
+		if declaration.Recv == nil {
+			s.targets[scope] = appendTarget(s.targets[scope], declaration.Name.Name, key)
+		}
+		if declaration.Body != nil {
 			s.callables = append(s.callables, callable{
-				packageKey: scope, namespace: pkg.importKey, source: key, body: declaration.Body, path: path,
+				packageKey: scope,
+				namespace:  pkg.importKey,
+				source:     key,
+				body:       declaration.Body,
+				path:       path,
 			})
 		}
 	}
+}
+
+func declarationIdentity(importPath, path string, declaration *ast.FuncDecl) (NodeKind, string) {
+	name := declaration.Name.Name
+	if declaration.Recv != nil {
+		receiver := receiverName(declaration.Recv)
+		return KindMethod, "method:" + importPath + ":" + receiver + "." + name
+	}
+	if strings.HasSuffix(path, "_test.go") && strings.HasPrefix(name, "Test") {
+		return KindTest, "test:" + importPath + ":" + name
+	}
+	return KindFunction, "function:" + importPath + ":" + name
+}
+
+func declarationKey(importPath, path string, declaration *ast.FuncDecl) NodeKey {
+	_, identity := declarationIdentity(importPath, path, declaration)
+	return hashIdentity(identity)
 }
 
 func appendTarget(targets map[string][]NodeKey, name string, key NodeKey) map[string][]NodeKey {
@@ -75,6 +90,8 @@ func expressionName(expression ast.Expr) string {
 		return expressionName(expression.X)
 	case *ast.IndexListExpr:
 		return expressionName(expression.X)
+	case *ast.ParenExpr:
+		return expressionName(expression.X)
 	default:
 		return "anonymous"
 	}
@@ -94,6 +111,17 @@ func (s *scanner) addCallEdges() {
 				return true
 			}
 			s.summary.CallExpressions++
+			span := s.span(call.Pos(), call.End(), function.path)
+			if resolution, exists := s.semanticCalls[callsiteKey(function.source, span)]; exists {
+				if resolution.resolved {
+					s.addEdge(function.source, resolution.target, RelCalls, span)
+					s.summary.DirectCalls++
+				} else {
+					s.addUnresolved(function, call, resolution.reason, resolution.namespace, resolution.name)
+				}
+				return true
+			}
+
 			identifier, ok := call.Fun.(*ast.Ident)
 			if !ok {
 				reason, namespace, name := classifyNonIdentifier(call.Fun)
@@ -120,7 +148,7 @@ func (s *scanner) addCallEdges() {
 				s.addUnresolved(function, call, ReasonSelfTarget, function.namespace, identifier.Name)
 				return true
 			}
-			s.addEdge(function.source, target, RelCalls, s.span(call.Pos(), call.End(), function.path))
+			s.addEdge(function.source, target, RelCalls, span)
 			s.summary.DirectCalls++
 			return true
 		})
@@ -140,6 +168,20 @@ func (s *scanner) addUnresolved(
 		Span: s.span(call.Pos(), call.End(), function.path),
 	})
 	s.summary.UnresolvedCalls++
+	s.trackUnresolvedReason(reason)
+}
+
+func (s *scanner) trackUnresolvedReason(reason UnresolvedReason) {
+	switch reason {
+	case ReasonBuiltinTarget:
+		s.summary.BuiltinCalls++
+	case ReasonTypeConversion:
+		s.summary.ConversionCalls++
+	case ReasonExternalTarget:
+		s.summary.ExternalCalls++
+	case ReasonDynamicTarget:
+		s.summary.DynamicCalls++
+	}
 }
 
 func classifyNonIdentifier(expression ast.Expr) (UnresolvedReason, string, string) {
@@ -168,12 +210,27 @@ func isBuiltin(name string) bool {
 }
 
 func (s *scanner) span(start, end token.Pos, path string) *SourceSpan {
+	return spanFromSet(s.set, start, end, path)
+}
+
+func spanFromSet(set *token.FileSet, start, end token.Pos, path string) *SourceSpan {
 	if !start.IsValid() || !end.IsValid() {
 		return nil
 	}
-	begin := s.set.PositionFor(start, false)
-	finish := s.set.PositionFor(end, false)
-	return &SourceSpan{Path: path, StartLine: uint32(begin.Line), StartColumn: uint32(begin.Column), EndLine: uint32(finish.Line), EndColumn: uint32(finish.Column)}
+	begin := set.PositionFor(start, false)
+	finish := set.PositionFor(end, false)
+	return &SourceSpan{
+		Path: path, StartLine: uint32(begin.Line), StartColumn: uint32(begin.Column),
+		EndLine: uint32(finish.Line), EndColumn: uint32(finish.Column),
+	}
+}
+
+func callsiteKey(source NodeKey, span *SourceSpan) string {
+	if span == nil {
+		return fmt.Sprintf("%016x/-", source)
+	}
+	return fmt.Sprintf("%016x/%s/%d/%d/%d/%d", source, span.Path, span.StartLine,
+		span.StartColumn, span.EndLine, span.EndColumn)
 }
 
 func isGoFile(path string) bool { return filepath.Ext(path) == ".go" }

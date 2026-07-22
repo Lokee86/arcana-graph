@@ -183,12 +183,6 @@ fn validate_direction(
                     node_count: header.node_count,
                 });
             }
-            if adjacent == node {
-                return Err(PackedError::SelfEdge {
-                    direction,
-                    node: NodeId(node),
-                });
-            }
             if previous.is_some_and(|value| value >= (adjacent, kind)) {
                 return Err(PackedError::UnsortedAdjacency {
                     direction,

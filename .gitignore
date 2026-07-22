@@ -1,5 +1,5 @@
 # Rust build artifacts
 target/
 
-# ArcanaGraph local state and generated data
+# Arcana local state and generated data
 .arcana/

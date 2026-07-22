@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use arcana_graph::repository::{
+use arcana::repository::{
     EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, RepositoryFacts, encode_facts,
 };
 

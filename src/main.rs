@@ -8,10 +8,10 @@ use std::env;
 use std::fs::{self, File};
 use std::process::ExitCode;
 
-use arcana_graph::benchmark::{
+use arcana::benchmark::{
     BenchmarkCommand, BenchmarkConfig, benchmark_usage, run_mutation_benchmark,
 };
-use arcana_graph::{PROJECT_NAME, PROJECT_VERSION, about};
+use arcana::{PROJECT_NAME, PROJECT_VERSION, about};
 
 fn main() -> ExitCode {
     match cli::parse(env::args().skip(1)) {
@@ -92,9 +92,9 @@ fn run_benchmark_command(arguments: Vec<String>) -> ExitCode {
 }
 
 fn write_csv(
-    report: &arcana_graph::benchmark::BenchmarkReport,
+    report: &arcana::benchmark::BenchmarkReport,
     path: &std::path::Path,
-) -> Result<(), arcana_graph::benchmark::BenchmarkError> {
+) -> Result<(), arcana::benchmark::BenchmarkError> {
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())

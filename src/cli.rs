@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use arcana_graph::repository::RelationKind;
+use arcana::repository::RelationKind;
 
 pub const USAGE: &str = "Usage: arcana [OPTIONS] [COMMAND]\n\nOptions:\n    -h, --help       Print this help message\n    -V, --version    Print version information\n\nCommands:\n    benchmark        Compare overlays with packed snapshot rebuilds\n    import-facts     Compile a fact TSV into a packed graph and catalogue\n    query            Query exact node names from a packed graph\n\nImport facts:\n    arcana import-facts --facts <FILE> --output <NEW-DIRECTORY>\n\nQuery:\n    arcana query --graph <FILE> --catalogue <FILE> --name <EXACT-NAME> [--reverse] [--relation <RELATION>]";
 

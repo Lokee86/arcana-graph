@@ -18,7 +18,7 @@ impl TempPath {
     fn new(label: &str) -> Self {
         let sequence = PATH_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         Self(std::env::temp_dir().join(format!(
-            "arcana-graph-{label}-{}-{sequence}.pack",
+            "arcana-{label}-{}-{sequence}.pack",
             std::process::id()
         )))
     }

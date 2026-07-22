@@ -3,12 +3,12 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use arcana_graph::repository::{
+use arcana::repository::{
     CatalogueError, CompiledRepository, FactFileError, NodeFact, RelationKind, RepositoryCatalogue,
     RepositoryCompileError, RepositoryFacts, edge_kind_to_relation,
 };
-use arcana_graph::storage::{PackedError, PackedGraph, QueryError};
-use arcana_graph::synthetic::NodeId;
+use arcana::storage::{PackedError, PackedGraph, QueryError};
+use arcana::synthetic::NodeId;
 
 use crate::cli::{ImportFactsCommand, QueryCommand};
 
@@ -103,7 +103,7 @@ pub fn run_import_facts(command: &ImportFactsCommand) -> Result<String, CliComma
     }
     let text = fs::read_to_string(&command.facts)?;
     let facts = RepositoryFacts::parse(&text)?;
-    let compiled = arcana_graph::repository::compile_repository_facts(&facts)?;
+    let compiled = arcana::repository::compile_repository_facts(&facts)?;
     fs::create_dir(&command.output)?;
     write_compiled(&command.output, &compiled)
 }
@@ -111,8 +111,8 @@ pub fn run_import_facts(command: &ImportFactsCommand) -> Result<String, CliComma
 fn write_compiled(output: &Path, compiled: &CompiledRepository) -> Result<String, CliCommandError> {
     let graph_path = output.join("graph.arcana");
     let catalogue_path = output.join("catalogue.tsv");
-    arcana_graph::storage::write_packed(&graph_path, &compiled.dataset)?;
-    arcana_graph::repository::write_catalogue(&catalogue_path, &compiled.catalogue)?;
+    arcana::storage::write_packed(&graph_path, &compiled.dataset)?;
+    arcana::repository::write_catalogue(&catalogue_path, &compiled.catalogue)?;
     let graph_size = fs::metadata(&graph_path)?.len();
     let catalogue_size = fs::metadata(&catalogue_path)?.len();
     Ok(format!(

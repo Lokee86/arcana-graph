@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use super::ManifestError;
 
-/// The only manifest format currently understood by ArcanaGraph.
+/// The only manifest format currently understood by Arcana.
 pub const MANIFEST_VERSION: u64 = 1;
 
 const FIELD_ORDER: [&str; 11] = [

@@ -1,12 +1,12 @@
 [package]
-name = "arcana-graph"
+name = "arcana"
 version = "0.1.0"
 edition = "2024"
 description = "An independent repository-graph foundation"
 publish = false
 
 [lib]
-name = "arcana_graph"
+name = "arcana"
 path = "src/lib.rs"
 
 [[bin]]

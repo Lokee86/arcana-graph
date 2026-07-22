@@ -1,27 +1,27 @@
-# ArcanaGraph
+# Arcana
 
-ArcanaGraph is the repository-graph foundation of the [**Warlock Toolchain**](https://github.com/Lokee86/warlock-toolchain).
+Arcana is the repository-graph foundation of the [**Warlock Toolchain**](https://github.com/Lokee86/warlock-toolchain).
 It models repositories as queryable graphs and provides the storage, snapshot,
 and traversal foundations used by higher-level Warlock tools such as Demon Docs,
 Grimoire Context, and Pitlord.
 
 ## Ownership boundaries
 
-- **ArcanaGraph** owns the factual repository graph, graph storage, snapshots,
+- **Arcana** owns the factual repository graph, graph storage, snapshots,
   deterministic queries, and measurements of storage representations.
 - **Demon Docs** owns documentation semantics, policy, review history, and
-  Codemap decisions. It consumes ArcanaGraph facts without owning the graph
+  Codemap decisions. It consumes Arcana facts without owning the graph
   engine.
 - **Grimoire Context** owns task interpretation, relevance ranking, token
-  budgets, and final context construction. It queries ArcanaGraph and Demon
+  budgets, and final context construction. It queries Arcana and Demon
   Docs without becoming either system's storage layer.
 
-ArcanaGraph remains a standalone Rust process or CLI boundary. Go consumers do
+Arcana remains a standalone Rust process or CLI boundary. Go consumers do
 not link it through cgo or FFI.
 
 ## Graph workload foundation
 
-ArcanaGraph includes deterministic synthetic graph generation for exercising
+Arcana includes deterministic synthetic graph generation for exercising
 its packed storage, snapshot, overlay, and compaction systems across more than a
 single toy topology.
 
@@ -75,7 +75,7 @@ correctness oracle used by round-trip tests.
 
 ## Snapshots and overlays
 
-ArcanaGraph snapshots are immutable compositions rather than mutable graph
+Arcana snapshots are immutable compositions rather than mutable graph
 files. A snapshot manifest identifies one validated packed base plus an optional
 immutable overlay. The manifest is published last, so readers never observe a
 partially assembled snapshot.
@@ -94,7 +94,7 @@ manifest last. The source snapshot remains untouched.
 
 ## Repository ingestion
 
-ArcanaGraph now accepts language-neutral repository facts and compiles them into
+Arcana now accepts language-neutral repository facts and compiles them into
 the same dense packed graph format used by its synthetic workloads. The compiled
 output contains:
 
@@ -179,4 +179,4 @@ cargo run -- --version
 
 ## License
 
-ArcanaGraph is available under the [MIT License](LICENSE.md).
+Arcana is available under the [MIT License](LICENSE.md).

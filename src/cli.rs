@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use arcana::repository::RelationKind;
 
-pub const USAGE: &str = "Usage: arcana [OPTIONS] [COMMAND]\n\nOptions:\n    -h, --help       Print this help message\n    -V, --version    Print version information\n\nCommands:\n    benchmark        Compare overlays with packed snapshot rebuilds\n    import-facts     Compile a fact TSV into a packed graph and catalogue\n    query            Query exact node names from a packed graph\n\nImport facts:\n    arcana import-facts --facts <FILE> --output <NEW-DIRECTORY>\n\nQuery:\n    arcana query --graph <FILE> --catalogue <FILE> --name <EXACT-NAME> [--reverse] [--relation <RELATION>]";
+pub const USAGE: &str = "Usage: arcana [OPTIONS] [COMMAND]\n\nOptions:\n    -h, --help       Print this help message\n    -V, --version    Print version information\n\nCommands:\n    benchmark        Compare overlays with packed snapshot rebuilds\n    import-facts     Compile a fact TSV into a packed graph and catalogue\n    query            Query exact node names from a packed graph\n    protocol         Serve machine-readable JSONL graph queries\n\nImport facts:\n    arcana import-facts --facts <FILE> --output <NEW-DIRECTORY>\n\nQuery:\n    arcana query --graph <FILE> --catalogue <FILE> --name <EXACT-NAME> [--reverse] [--relation <RELATION>]\n\nProtocol:\n    arcana protocol --snapshot <DIRECTORY>";
 
 #[derive(Debug)]
 pub enum Command {
@@ -12,6 +12,7 @@ pub enum Command {
     Benchmark(Vec<String>),
     ImportFacts(ImportFactsCommand),
     Query(QueryCommand),
+    Protocol(ProtocolCommand),
 }
 
 #[derive(Debug)]
@@ -27,6 +28,11 @@ pub struct QueryCommand {
     pub name: String,
     pub reverse: bool,
     pub relation: Option<RelationKind>,
+}
+
+#[derive(Debug)]
+pub struct ProtocolCommand {
+    pub snapshot: PathBuf,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,6 +72,7 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Cli
         "benchmark" => Ok(Command::Benchmark(rest)),
         "import-facts" => Ok(Command::ImportFacts(parse_import_facts(rest)?)),
         "query" => Ok(Command::Query(parse_query(rest)?)),
+        "protocol" => Ok(Command::Protocol(parse_protocol(rest)?)),
         argument => Err(CliParseError::UnexpectedArgument(argument.to_owned())),
     }
 }
@@ -113,6 +120,17 @@ fn parse_query(arguments: Vec<String>) -> Result<QueryCommand, CliParseError> {
         name: name.ok_or(CliParseError::MissingRequired("--name"))?,
         reverse,
         relation,
+    })
+}
+
+fn parse_protocol(arguments: Vec<String>) -> Result<ProtocolCommand, CliParseError> {
+    let mut snapshot = None;
+    parse_options(arguments, |option, value| match option {
+        "--snapshot" => set_path(&mut snapshot, value.as_deref(), "--snapshot"),
+        option => Err(CliParseError::UnknownFlag(option.to_owned())),
+    })?;
+    Ok(ProtocolCommand {
+        snapshot: snapshot.ok_or(CliParseError::MissingRequired("--snapshot"))?,
     })
 }
 

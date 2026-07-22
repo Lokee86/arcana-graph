@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use arcana::repository::{
-    EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, RepositoryFacts, encode_facts,
+    EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, RepositoryFacts, UnresolvedReason,
+    UnresolvedReferenceFact, encode_facts,
 };
 
 use super::cli::{self, CliParseError, Command};
@@ -91,6 +92,15 @@ fn import_and_query_round_trip() {
             relation: RelationKind::Calls,
             span: None,
         }],
+        unresolved: vec![UnresolvedReferenceFact {
+            source: caller,
+            relation: RelationKind::Calls,
+            expression: "pkg.Call".to_owned(),
+            candidate_namespace: Some("pkg".to_owned()),
+            candidate_name: Some("Call".to_owned()),
+            reason: UnresolvedReason::UnsupportedForm,
+            span: None,
+        }],
     };
     fs::write(&facts_path, encode_facts(&facts)).unwrap();
 
@@ -99,9 +109,17 @@ fn import_and_query_round_trip() {
         output: output.clone(),
     })
     .unwrap();
-    assert!(summary.contains("nodes=2") && summary.contains("edges=1"));
+    assert!(
+        summary.contains("nodes=2")
+            && summary.contains("edges=1")
+            && summary.contains("unresolved=1")
+    );
     assert!(output.join("graph.arcana").is_file());
     assert!(output.join("catalogue.tsv").is_file());
+    let unresolved_path = output.join("unresolved.tsv");
+    assert!(unresolved_path.is_file());
+    let persisted = RepositoryFacts::parse(&fs::read_to_string(unresolved_path).unwrap()).unwrap();
+    assert_eq!(persisted.unresolved, facts.unresolved);
     assert!(
         run_import_facts(&super::cli::ImportFactsCommand {
             facts: directory.path.join("facts.tsv"),

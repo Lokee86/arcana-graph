@@ -26,6 +26,7 @@ type packageInfo struct {
 
 type callable struct {
 	packageKey string
+	namespace  string
 	source     NodeKey
 	body       *ast.BlockStmt
 	path       string

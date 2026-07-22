@@ -2,8 +2,9 @@ use crate::synthetic::{EdgeKind, NodeId};
 
 use super::{
     CatalogueEntry, ContentId, EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind,
-    RepositoryCatalogue, RepositoryFacts, SourceSpan, compile_repository_facts,
-    edge_kind_to_relation, read_catalogue, relation_to_edge_kind, write_catalogue,
+    RepositoryCatalogue, RepositoryCompileError, RepositoryFacts, SourceSpan, UnresolvedReason,
+    UnresolvedReferenceFact, compile_repository_facts, edge_kind_to_relation, read_catalogue,
+    relation_to_edge_kind, write_catalogue,
 };
 
 #[test]
@@ -18,6 +19,7 @@ fn compiler_assigns_dense_ids_and_stable_relation_codes() {
             relation: RelationKind::Calls,
             span: None,
         }],
+        unresolved: Vec::new(),
     };
     let compiled = compile_repository_facts(&facts).unwrap();
     assert_eq!(compiled.dataset.node_count, 2);
@@ -49,24 +51,59 @@ fn compiler_rejects_invalid_facts() {
     assert!(
         compile_repository_facts(&RepositoryFacts {
             nodes: vec![base.clone(), conflicting],
-            edges: vec![]
+            edges: vec![],
+            unresolved: Vec::new(),
         })
         .is_err()
     );
     assert!(
         compile_repository_facts(&RepositoryFacts {
             nodes: vec![base.clone()],
-            edges: vec![edge(key, NodeKey::from_u64(99))]
+            edges: vec![edge(key, NodeKey::from_u64(99))],
+            unresolved: Vec::new(),
         })
         .is_err()
     );
     assert!(
         compile_repository_facts(&RepositoryFacts {
             nodes: vec![base],
-            edges: vec![edge(key, key)]
+            edges: vec![edge(key, key)],
+            unresolved: Vec::new(),
         })
         .is_err()
     );
+}
+
+#[test]
+fn compiler_preserves_and_validates_unresolved_references() {
+    let source = NodeKey::from_identity("source");
+    let reference = UnresolvedReferenceFact {
+        source,
+        relation: RelationKind::Calls,
+        expression: "pkg.Call".to_owned(),
+        candidate_namespace: Some("pkg".to_owned()),
+        candidate_name: Some("Call".to_owned()),
+        reason: UnresolvedReason::UnsupportedForm,
+        span: Some(SourceSpan::new("src/main.rs", 1, 1, 1, 9).unwrap()),
+    };
+    let facts = RepositoryFacts::with_unresolved(
+        vec![node(source, "src/main.rs")],
+        vec![],
+        vec![reference.clone()],
+    );
+    let compiled = compile_repository_facts(&facts).unwrap();
+    assert_eq!(compiled.unresolved, vec![reference.clone()]);
+
+    let error = compile_repository_facts(&RepositoryFacts::with_unresolved(
+        vec![],
+        vec![],
+        vec![reference],
+    ))
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        RepositoryCompileError::MissingUnresolvedSource { key } if key == source
+    ));
 }
 
 #[test]

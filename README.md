@@ -100,7 +100,9 @@ output contains:
 
 - `graph.arcana` — packed forward and reverse adjacency;
 - `catalogue.tsv` — dense node IDs mapped back to stable keys, paths, names,
-  kinds, content IDs, and source spans.
+  kinds, content IDs, and source spans;
+- `unresolved.tsv` — canonical version-2 unresolved-reference facts keyed back to
+  catalogue nodes.
 
 The first adapter uses Go's standard `go/parser` and `go/ast` packages. It emits
 repository, directory, file, package, import, type, function, method, and test
@@ -125,8 +127,10 @@ cargo run --release -- query \
 
 The current Go call resolver deliberately emits only unambiguous, unqualified,
 same-package function calls. Selector calls, method dispatch, built-ins,
-cross-package calls, closures, and recursive self-calls remain unresolved rather
-than becoming speculative graph edges. See
+cross-package calls, closures, and recursive self-calls are retained as
+first-class unresolved-reference facts rather than becoming speculative graph
+edges. Each unresolved fact records its source, intended relation, expression,
+candidate namespace and name when available, reason, and source span. See
 [`docs/GO_ADAPTER_VALIDATION.md`](docs/GO_ADAPTER_VALIDATION.md) for the first
 real-repository results.
 

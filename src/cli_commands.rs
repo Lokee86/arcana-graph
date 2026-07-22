@@ -111,17 +111,24 @@ pub fn run_import_facts(command: &ImportFactsCommand) -> Result<String, CliComma
 fn write_compiled(output: &Path, compiled: &CompiledRepository) -> Result<String, CliCommandError> {
     let graph_path = output.join("graph.arcana");
     let catalogue_path = output.join("catalogue.tsv");
+    let unresolved_path = output.join("unresolved.tsv");
     arcana::storage::write_packed(&graph_path, &compiled.dataset)?;
     arcana::repository::write_catalogue(&catalogue_path, &compiled.catalogue)?;
+    let unresolved_facts =
+        RepositoryFacts::with_unresolved(Vec::new(), Vec::new(), compiled.unresolved.clone());
+    fs::write(&unresolved_path, unresolved_facts.encode())?;
     let graph_size = fs::metadata(&graph_path)?.len();
     let catalogue_size = fs::metadata(&catalogue_path)?.len();
+    let unresolved_size = fs::metadata(&unresolved_path)?.len();
     Ok(format!(
-        "imported facts: nodes={} edges={} graph.arcana={} bytes catalogue.tsv={} bytes total={} bytes\n",
+        "imported facts: nodes={} edges={} unresolved={} graph.arcana={} bytes catalogue.tsv={} bytes unresolved.tsv={} bytes total={} bytes\n",
         compiled.dataset.node_count,
         compiled.dataset.edges.len(),
+        compiled.unresolved.len(),
         graph_size,
         catalogue_size,
-        graph_size + catalogue_size
+        unresolved_size,
+        graph_size + catalogue_size + unresolved_size
     ))
 }
 

@@ -56,9 +56,32 @@ type EdgeFact struct {
 	Span           *SourceSpan
 }
 
+type UnresolvedReason string
+
+const (
+	ReasonMissingTarget   UnresolvedReason = "missing-target"
+	ReasonAmbiguousTarget UnresolvedReason = "ambiguous-target"
+	ReasonUnsupportedForm UnresolvedReason = "unsupported-form"
+	ReasonDynamicTarget   UnresolvedReason = "dynamic-target"
+	ReasonExternalTarget  UnresolvedReason = "external-target"
+	ReasonBuiltinTarget   UnresolvedReason = "builtin-target"
+	ReasonSelfTarget      UnresolvedReason = "self-target"
+)
+
+type UnresolvedReferenceFact struct {
+	Source             NodeKey
+	Relation           RelationKind
+	Expression         string
+	CandidateNamespace string
+	CandidateName      string
+	Reason             UnresolvedReason
+	Span               *SourceSpan
+}
+
 type RepositoryFacts struct {
-	Nodes []NodeFact
-	Edges []EdgeFact
+	Nodes      []NodeFact
+	Edges      []EdgeFact
+	Unresolved []UnresolvedReferenceFact
 }
 
 func hashBytes(bytes []byte) uint64 {
@@ -82,6 +105,7 @@ func formatID(value uint64) string {
 func encodeFacts(facts RepositoryFacts) string {
 	nodes := append([]NodeFact(nil), facts.Nodes...)
 	edges := append([]EdgeFact(nil), facts.Edges...)
+	unresolved := append([]UnresolvedReferenceFact(nil), facts.Unresolved...)
 	sort.Slice(nodes, func(i, j int) bool {
 		if nodes[i].Key != nodes[j].Key {
 			return nodes[i].Key < nodes[j].Key
@@ -106,9 +130,31 @@ func encodeFacts(facts RepositoryFacts) string {
 		}
 		return spanText(edges[i].Span) < spanText(edges[j].Span)
 	})
+	sort.Slice(unresolved, func(i, j int) bool {
+		left, right := unresolved[i], unresolved[j]
+		if left.Source != right.Source {
+			return left.Source < right.Source
+		}
+		if left.Relation != right.Relation {
+			return left.Relation < right.Relation
+		}
+		if left.Expression != right.Expression {
+			return left.Expression < right.Expression
+		}
+		if left.CandidateNamespace != right.CandidateNamespace {
+			return left.CandidateNamespace < right.CandidateNamespace
+		}
+		if left.CandidateName != right.CandidateName {
+			return left.CandidateName < right.CandidateName
+		}
+		if left.Reason != right.Reason {
+			return left.Reason < right.Reason
+		}
+		return spanText(left.Span) < spanText(right.Span)
+	})
 
 	var output strings.Builder
-	output.WriteString("version\t1\n")
+	output.WriteString("version\t2\n")
 	for _, node := range nodes {
 		fields := []string{"N", formatID(uint64(node.Key)), string(node.Kind), node.Path, node.Name, "-"}
 		if node.ContentID != nil {
@@ -122,7 +168,23 @@ func encodeFacts(facts RepositoryFacts) string {
 		fields = append(fields, spanFields(edge.Span)...)
 		writeRecord(&output, fields)
 	}
+	for _, reference := range unresolved {
+		fields := []string{
+			"U", formatID(uint64(reference.Source)), string(reference.Relation),
+			string(reference.Reason), reference.Expression, optionalField(reference.CandidateNamespace),
+			optionalField(reference.CandidateName),
+		}
+		fields = append(fields, spanFields(reference.Span)...)
+		writeRecord(&output, fields)
+	}
 	return output.String()
+}
+
+func optionalField(value string) string {
+	if value == "" {
+		return "-"
+	}
+	return value
 }
 
 func writeRecord(output *strings.Builder, fields []string) {

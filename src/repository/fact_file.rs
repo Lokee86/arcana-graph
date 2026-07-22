@@ -2,19 +2,22 @@ use std::fmt;
 
 use super::{
     ContentId, EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, RepositoryFacts, SourceSpan,
-    normalize_repository_path,
+    UnresolvedReason, UnresolvedReferenceFact, normalize_repository_path,
 };
 
-const HEADER: &str = "version\t1";
+const HEADER_V1: &str = "version\t1";
+const HEADER_V2: &str = "version\t2";
 
 /// Encodes repository facts as canonical tab-separated UTF-8 lines.
 pub fn encode_facts(facts: &RepositoryFacts) -> String {
     let mut nodes = facts.nodes.clone();
     let mut edges = facts.edges.clone();
+    let mut unresolved = facts.unresolved.clone();
     nodes.sort_unstable();
     edges.sort_unstable();
+    unresolved.sort_unstable();
 
-    let mut output = String::from(HEADER);
+    let mut output = String::from(HEADER_V2);
     output.push('\n');
     for node in nodes {
         output.push_str("N\t");
@@ -43,15 +46,33 @@ pub fn encode_facts(facts: &RepositoryFacts) -> String {
         push_span(&mut output, edge.span.as_ref());
         output.push('\n');
     }
+    for reference in unresolved {
+        output.push_str("U\t");
+        push_field(&mut output, &format_id(reference.source.0));
+        output.push('\t');
+        push_field(&mut output, reference.relation.as_str());
+        output.push('\t');
+        push_field(&mut output, reference.reason.as_str());
+        output.push('\t');
+        push_field(&mut output, &reference.expression);
+        output.push('\t');
+        push_optional_field(&mut output, reference.candidate_namespace.as_deref());
+        output.push('\t');
+        push_optional_field(&mut output, reference.candidate_name.as_deref());
+        push_span(&mut output, reference.span.as_ref());
+        output.push('\n');
+    }
     output
 }
 
 /// Parses the canonical tab-separated repository fact format.
 pub fn parse_facts(input: &str) -> Result<RepositoryFacts, FactFileError> {
     let mut lines = input.lines();
-    if lines.next() != Some(HEADER) {
-        return Err(FactFileError::InvalidHeader);
-    }
+    let version = match lines.next() {
+        Some(HEADER_V1) => 1,
+        Some(HEADER_V2) => 2,
+        _ => return Err(FactFileError::InvalidHeader),
+    };
 
     let mut facts = RepositoryFacts::default();
     for (index, line) in lines.enumerate() {
@@ -66,6 +87,9 @@ pub fn parse_facts(input: &str) -> Result<RepositoryFacts, FactFileError> {
         match fields.first().map(String::as_str) {
             Some("N") => facts.nodes.push(parse_node(&fields, line_number)?),
             Some("E") => facts.edges.push(parse_edge(&fields, line_number)?),
+            Some("U") if version >= 2 => facts
+                .unresolved
+                .push(parse_unresolved(&fields, line_number)?),
             _ => return Err(FactFileError::UnknownRecord { line: line_number }),
         }
     }
@@ -81,6 +105,7 @@ pub enum FactFileError {
     InvalidNumber { line: usize },
     InvalidKind { line: usize },
     InvalidRelation { line: usize },
+    InvalidReason { line: usize },
     InvalidEscape { line: usize },
     InvalidSpan { line: usize },
 }
@@ -107,6 +132,10 @@ impl fmt::Display for FactFileError {
             Self::InvalidRelation { line } => write!(
                 formatter,
                 "repository fact line {line} has an invalid relation"
+            ),
+            Self::InvalidReason { line } => write!(
+                formatter,
+                "repository fact line {line} has an invalid unresolved reason"
             ),
             Self::InvalidEscape { line } => write!(
                 formatter,
@@ -147,6 +176,24 @@ fn parse_edge(fields: &[String], line: usize) -> Result<EdgeFact, FactFileError>
         target: NodeKey::from_u64(parse_id(&fields[2], line)?),
         relation: RelationKind::parse(&fields[3]).ok_or(FactFileError::InvalidRelation { line })?,
         span: parse_span(&fields[4..9], line)?,
+    })
+}
+
+fn parse_unresolved(
+    fields: &[String],
+    line: usize,
+) -> Result<UnresolvedReferenceFact, FactFileError> {
+    if fields.len() != 12 {
+        return Err(FactFileError::MalformedLine { line });
+    }
+    Ok(UnresolvedReferenceFact {
+        source: NodeKey::from_u64(parse_id(&fields[1], line)?),
+        relation: RelationKind::parse(&fields[2]).ok_or(FactFileError::InvalidRelation { line })?,
+        reason: UnresolvedReason::parse(&fields[3]).ok_or(FactFileError::InvalidReason { line })?,
+        expression: fields[4].clone(),
+        candidate_namespace: parse_optional_field(&fields[5]),
+        candidate_name: parse_optional_field(&fields[6]),
+        span: parse_span(&fields[7..12], line)?,
     })
 }
 
@@ -208,6 +255,14 @@ fn push_span(output: &mut String, span: Option<&SourceSpan>) {
     } else {
         output.push_str("\t-\t-\t-\t-\t-");
     }
+}
+
+fn push_optional_field(output: &mut String, value: Option<&str>) {
+    push_field(output, value.unwrap_or("-"));
+}
+
+fn parse_optional_field(value: &str) -> Option<String> {
+    (value != "-").then(|| value.to_owned())
 }
 
 fn push_field(output: &mut String, value: &str) {

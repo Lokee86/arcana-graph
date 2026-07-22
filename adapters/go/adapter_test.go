@@ -68,12 +68,20 @@ func TestCaller(t *testing.T) { helper() }
 	if countRelation(first, RelCalls) != 2 {
 		t.Fatalf("call edge count = %d, want 2", countRelation(first, RelCalls))
 	}
+	if len(first.Unresolved) != 1 {
+		t.Fatalf("unresolved fact count = %d, want 1", len(first.Unresolved))
+	}
+	unresolved := first.Unresolved[0]
+	if unresolved.Expression != "fmt.Println" || unresolved.CandidateNamespace != "fmt" ||
+		unresolved.CandidateName != "Println" || unresolved.Reason != ReasonUnsupportedForm {
+		t.Fatalf("unexpected unresolved fact: %#v", unresolved)
+	}
 	packageKey := hashIdentity("package:example.com/demo:demo")
 	fileKey := hashIdentity("file:main.go")
 	if !hasEdge(first, packageKey, fileKey, RelContains) || hasEdge(first, fileKey, packageKey, RelContains) {
 		t.Fatal("package/file containment direction is incorrect")
 	}
-	if !strings.Contains(encodeFacts(first), "version\t1\n") {
+	if !strings.Contains(encodeFacts(first), "version\t2\n") {
 		t.Fatal("fact output has no canonical header")
 	}
 }

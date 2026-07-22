@@ -4,7 +4,7 @@ use std::fmt;
 use crate::synthetic::{Edge, EdgeKind, GraphDataset, NodeId};
 
 use super::catalogue::{CatalogueEntry, CatalogueError, RepositoryCatalogue};
-use super::{NodeFact, NodeKey, RelationKind, RepositoryFacts};
+use super::{NodeFact, NodeKey, RelationKind, RepositoryFacts, UnresolvedReferenceFact};
 
 /// The compiled graph and its metadata catalogue.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +12,7 @@ pub struct CompiledRepository {
     pub dataset: GraphDataset,
     pub node_ids: BTreeMap<NodeKey, NodeId>,
     pub catalogue: RepositoryCatalogue,
+    pub unresolved: Vec<UnresolvedReferenceFact>,
 }
 
 /// A repository fact set that cannot be compiled into a dense graph.
@@ -21,6 +22,9 @@ pub enum RepositoryCompileError {
         key: NodeKey,
     },
     MissingEdgeEndpoint {
+        key: NodeKey,
+    },
+    MissingUnresolvedSource {
         key: NodeKey,
     },
     SelfEdge {
@@ -44,6 +48,10 @@ impl fmt::Display for RepositoryCompileError {
             Self::MissingEdgeEndpoint { key } => {
                 write!(formatter, "edge references missing node key {key:?}")
             }
+            Self::MissingUnresolvedSource { key } => write!(
+                formatter,
+                "unresolved reference has missing source node key {key:?}"
+            ),
             Self::SelfEdge { key } => write!(formatter, "node key {key:?} has a self-edge"),
             Self::DuplicateEdge {
                 source,
@@ -117,6 +125,17 @@ pub fn compile_repository_facts(
         });
     }
 
+    let mut unresolved = facts.unresolved.clone();
+    unresolved.sort_unstable();
+    unresolved.dedup();
+    for reference in &unresolved {
+        if !node_ids.contains_key(&reference.source) {
+            return Err(RepositoryCompileError::MissingUnresolvedSource {
+                key: reference.source,
+            });
+        }
+    }
+
     let entries = nodes
         .into_iter()
         .map(|(key, fact)| CatalogueEntry {
@@ -132,6 +151,7 @@ pub fn compile_repository_facts(
         },
         node_ids,
         catalogue,
+        unresolved,
     })
 }
 

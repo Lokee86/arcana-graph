@@ -19,7 +19,7 @@ pub use compiler::{
 pub use fact_file::{FactFileError, encode_facts, parse_facts};
 pub use model::{
     ContentId, EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, RepositoryPathError,
-    SourceSpan, normalize_repository_path,
+    SourceSpan, UnresolvedReason, UnresolvedReferenceFact, normalize_repository_path,
 };
 
 /// The complete set of facts extracted from one repository.
@@ -27,11 +27,28 @@ pub use model::{
 pub struct RepositoryFacts {
     pub nodes: Vec<NodeFact>,
     pub edges: Vec<EdgeFact>,
+    pub unresolved: Vec<UnresolvedReferenceFact>,
 }
 
 impl RepositoryFacts {
     pub fn new(nodes: Vec<NodeFact>, edges: Vec<EdgeFact>) -> Self {
-        Self { nodes, edges }
+        Self {
+            nodes,
+            edges,
+            unresolved: Vec::new(),
+        }
+    }
+
+    pub fn with_unresolved(
+        nodes: Vec<NodeFact>,
+        edges: Vec<EdgeFact>,
+        unresolved: Vec<UnresolvedReferenceFact>,
+    ) -> Self {
+        Self {
+            nodes,
+            edges,
+            unresolved,
+        }
     }
 
     /// Returns the canonical tab-separated representation of these facts.
@@ -49,6 +66,7 @@ impl RepositoryFacts {
         let mut facts = self.clone();
         facts.nodes.sort_unstable();
         facts.edges.sort_unstable();
+        facts.unresolved.sort_unstable();
         facts
     }
 }

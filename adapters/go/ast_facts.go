@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"path/filepath"
 	"strings"
@@ -39,7 +41,9 @@ func (s *scanner) parseDeclaration(declaration ast.Decl, pkg packageInfo, path s
 		if declaration.Recv == nil && declaration.Body != nil {
 			scope := pkg.importKey + "\x00" + pkg.name
 			s.targets[scope] = appendTarget(s.targets[scope], name, key)
-			s.callables = append(s.callables, callable{packageKey: scope, source: key, body: declaration.Body, path: path})
+			s.callables = append(s.callables, callable{
+				packageKey: scope, namespace: pkg.importKey, source: key, body: declaration.Body, path: path,
+			})
 		}
 	}
 }
@@ -91,19 +95,75 @@ func (s *scanner) addCallEdges() {
 			}
 			s.summary.CallExpressions++
 			identifier, ok := call.Fun.(*ast.Ident)
-			if !ok || len(targets[identifier.Name]) != 1 {
-				s.summary.UnresolvedCalls++
+			if !ok {
+				reason, namespace, name := classifyNonIdentifier(call.Fun)
+				s.addUnresolved(function, call, reason, namespace, name)
 				return true
 			}
-			target := targets[identifier.Name][0]
+			candidates := targets[identifier.Name]
+			if len(candidates) == 0 {
+				reason := ReasonMissingTarget
+				namespace := function.namespace
+				if isBuiltin(identifier.Name) {
+					reason = ReasonBuiltinTarget
+					namespace = "go:builtins"
+				}
+				s.addUnresolved(function, call, reason, namespace, identifier.Name)
+				return true
+			}
+			if len(candidates) > 1 {
+				s.addUnresolved(function, call, ReasonAmbiguousTarget, function.namespace, identifier.Name)
+				return true
+			}
+			target := candidates[0]
 			if target == function.source {
-				s.summary.UnresolvedCalls++
+				s.addUnresolved(function, call, ReasonSelfTarget, function.namespace, identifier.Name)
 				return true
 			}
 			s.addEdge(function.source, target, RelCalls, s.span(call.Pos(), call.End(), function.path))
 			s.summary.DirectCalls++
 			return true
 		})
+	}
+}
+
+func (s *scanner) addUnresolved(
+	function callable,
+	call *ast.CallExpr,
+	reason UnresolvedReason,
+	namespace string,
+	name string,
+) {
+	s.facts.Unresolved = append(s.facts.Unresolved, UnresolvedReferenceFact{
+		Source: function.source, Relation: RelCalls, Expression: expressionText(s.set, call.Fun),
+		CandidateNamespace: namespace, CandidateName: name, Reason: reason,
+		Span: s.span(call.Pos(), call.End(), function.path),
+	})
+	s.summary.UnresolvedCalls++
+}
+
+func classifyNonIdentifier(expression ast.Expr) (UnresolvedReason, string, string) {
+	if selector, ok := expression.(*ast.SelectorExpr); ok {
+		return ReasonUnsupportedForm, expressionName(selector.X), selector.Sel.Name
+	}
+	return ReasonDynamicTarget, "", expressionName(expression)
+}
+
+func expressionText(set *token.FileSet, expression ast.Expr) string {
+	var output bytes.Buffer
+	if err := printer.Fprint(&output, set, expression); err != nil {
+		return expressionName(expression)
+	}
+	return output.String()
+}
+
+func isBuiltin(name string) bool {
+	switch name {
+	case "append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "len",
+		"make", "max", "min", "new", "panic", "print", "println", "real", "recover":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -34,6 +34,7 @@ fn partitions_and_replaces_file_owned_facts() {
 fn node(key: NodeKey, kind: NodeKind, path: &str) -> NodeFact {
     NodeFact {
         key,
+        external_identity: None,
         kind,
         path: path.to_owned(),
         name: path.to_owned(),

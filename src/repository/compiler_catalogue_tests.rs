@@ -159,6 +159,7 @@ fn catalogue_file_is_immutable_and_validated() {
     assert_eq!(read_catalogue(&path).unwrap(), catalogue);
     assert!(write_catalogue(&path, &catalogue).is_err());
     let encoded = std::fs::read_to_string(&path).unwrap();
+    assert!(encoded.starts_with("version\t2\n"));
     assert!(RepositoryCatalogue::decode(encoded.trim_end_matches('\n')).is_err());
     std::fs::remove_file(path).unwrap();
 }
@@ -168,6 +169,7 @@ fn sample_catalogue() -> RepositoryCatalogue {
         node_id: NodeId(0),
         fact: NodeFact {
             key: NodeKey::from_identity("node"),
+            external_identity: None,
             kind: NodeKind::File,
             path: "src/main.rs".to_owned(),
             name: "main".to_owned(),
@@ -181,6 +183,7 @@ fn sample_catalogue() -> RepositoryCatalogue {
 fn node(key: NodeKey, path: &str) -> NodeFact {
     NodeFact {
         key,
+        external_identity: None,
         kind: NodeKind::File,
         path: path.to_owned(),
         name: String::new(),
@@ -196,4 +199,15 @@ fn edge(source: NodeKey, target: NodeKey) -> EdgeFact {
         relation: RelationKind::References,
         span: None,
     }
+}
+
+#[test]
+fn catalogue_reads_version_one_without_external_identities() {
+    let input = concat!(
+        "version\t1\n",
+        "N\t0\t0000000000000001\tfunction\tsrc/lib.rs\tlegacy\t-\t-\t-\t-\t-\t-\n"
+    );
+    let catalogue = RepositoryCatalogue::decode(input).unwrap();
+    assert_eq!(catalogue.entries().len(), 1);
+    assert_eq!(catalogue.entries()[0].fact.external_identity, None);
 }

@@ -32,6 +32,7 @@ pub(crate) fn node_value(entry: &CatalogueEntry) -> Value {
     json!({
         "node_id": entry.node_id.0,
         "key": format!("{:016x}", entry.fact.key.0),
+        "identity": entry.fact.external_identity,
         "kind": entry.fact.kind.as_str(),
         "path": entry.fact.path,
         "name": entry.fact.name,

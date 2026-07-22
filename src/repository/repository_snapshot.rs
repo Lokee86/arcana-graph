@@ -34,7 +34,7 @@ impl RepositorySnapshot {
             .unwrap_or_else(|| Path::new("."))
             .to_path_buf();
         let manifest = RepositorySnapshotManifest::decode(&fs::read_to_string(path)?)?;
-        if manifest.fact_schema_version != FACT_SCHEMA_VERSION {
+        if !(2..=FACT_SCHEMA_VERSION).contains(&manifest.fact_schema_version) {
             return Err(RepositorySnapshotError::UnsupportedFactSchema(
                 manifest.fact_schema_version,
             ));

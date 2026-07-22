@@ -73,6 +73,7 @@ fn facts(reverse: bool) -> RepositoryFacts {
 fn node(key: NodeKey, kind: NodeKind, path: &str, name: &str) -> NodeFact {
     NodeFact {
         key,
+        external_identity: None,
         kind,
         path: path.to_owned(),
         name: name.to_owned(),

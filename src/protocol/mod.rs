@@ -1,13 +1,16 @@
 //! Machine-readable JSON Lines query protocol for repository snapshots.
 
+mod analysis_queries;
 mod diff;
 mod error;
+mod path_queries;
 mod queries;
 mod request;
 mod response;
 mod server;
 mod session;
 mod stats;
+mod traversal;
 
 #[cfg(test)]
 mod tests;

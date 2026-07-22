@@ -172,6 +172,11 @@ pub fn relation_to_edge_kind(relation: &RelationKind) -> EdgeKind {
         RelationKind::Generates => 12,
         RelationKind::PossibleCalls => 13,
         RelationKind::ConvertsTo => 14,
+        RelationKind::UsesTrait => 15,
+        RelationKind::Overrides => 16,
+        RelationKind::Reads => 17,
+        RelationKind::Writes => 18,
+        RelationKind::Annotates => 19,
     })
 }
 
@@ -192,6 +197,11 @@ pub fn edge_kind_to_relation(kind: EdgeKind) -> Option<RelationKind> {
         12 => RelationKind::Generates,
         13 => RelationKind::PossibleCalls,
         14 => RelationKind::ConvertsTo,
+        15 => RelationKind::UsesTrait,
+        16 => RelationKind::Overrides,
+        17 => RelationKind::Reads,
+        18 => RelationKind::Writes,
+        19 => RelationKind::Annotates,
         _ => return None,
     })
 }

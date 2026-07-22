@@ -9,6 +9,7 @@ fn fact_file_round_trips_and_escapes_fields() {
     let facts = RepositoryFacts {
         nodes: vec![NodeFact {
             key: NodeKey::from_identity("node\t1"),
+            external_identity: Some(format!("sha256:{}", "2".repeat(64))),
             kind: NodeKind::Function,
             path: "src/main.rs".to_owned(),
             name: "line\t\nname\\".to_owned(),
@@ -33,6 +34,7 @@ fn fact_file_round_trips_and_escapes_fields() {
     };
 
     let encoded = encode_facts(&facts);
+    assert!(encoded.starts_with("version\t3\n"));
     assert!(encoded.contains("\\t") && encoded.contains("\\n") && encoded.contains("\\\\"));
     assert_eq!(parse_facts(&encoded).unwrap(), facts);
 }
@@ -42,6 +44,7 @@ fn encoding_sorts_records_deterministically() {
     let mut facts = RepositoryFacts::default();
     facts.nodes.push(NodeFact {
         key: NodeKey::from_u64(2),
+        external_identity: None,
         kind: NodeKind::File,
         path: "b".to_owned(),
         name: String::new(),
@@ -50,6 +53,7 @@ fn encoding_sorts_records_deterministically() {
     });
     facts.nodes.push(NodeFact {
         key: NodeKey::from_u64(1),
+        external_identity: None,
         kind: NodeKind::File,
         path: "a".to_owned(),
         name: String::new(),

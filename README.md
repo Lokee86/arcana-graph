@@ -20,6 +20,17 @@ Grimoire Context, and Pitlord.
 Arcana remains a standalone Rust process or CLI boundary. Go consumers do
 not link it through cgo or FFI.
 
+### Possible post-0.1.0 product-boundary review
+
+The separate implementation remains intentional, but the Warlock suite may later
+make Lexicon the primary consumer-facing source-analysis interface and treat
+Arcana as its optimized graph backend. Arcana would remain a separate Rust
+process, independently testable and directly usable for advanced graph work.
+
+This is a deferred product/interface option, not a 0.1.0 restructuring task.
+The current Lexicon snapshot and Arcana protocol boundaries remain authoritative
+for the initial release.
+
 ## Graph workload foundation
 
 Arcana includes deterministic synthetic graph generation for exercising

@@ -3,9 +3,13 @@ use super::{
     SourceSpan, UnresolvedReason, UnresolvedReferenceFact, normalize_repository_path,
 };
 
+#[path = "lexicon_fact_file.rs"]
+mod lexicon_fact_file;
+
 const HEADER_V1: &str = "version\t1";
-pub const FACT_SCHEMA_VERSION: u64 = 2;
 const HEADER_V2: &str = "version\t2";
+pub const FACT_SCHEMA_VERSION: u64 = 3;
+const HEADER_V3: &str = "version\t3";
 
 /// Encodes repository facts as canonical tab-separated UTF-8 lines.
 pub fn encode_facts(facts: &RepositoryFacts) -> String {
@@ -16,11 +20,13 @@ pub fn encode_facts(facts: &RepositoryFacts) -> String {
     edges.sort_unstable();
     unresolved.sort_unstable();
 
-    let mut output = String::from(HEADER_V2);
+    let mut output = String::from(HEADER_V3);
     output.push('\n');
     for node in nodes {
         output.push_str("N\t");
         push_field(&mut output, &format_id(node.key.0));
+        output.push('\t');
+        push_optional_field(&mut output, node.external_identity.as_deref());
         output.push('\t');
         push_field(&mut output, node.kind.as_str());
         output.push('\t');
@@ -66,10 +72,14 @@ pub fn encode_facts(facts: &RepositoryFacts) -> String {
 
 /// Parses the canonical tab-separated repository fact format.
 pub fn parse_facts(input: &str) -> Result<RepositoryFacts, FactFileError> {
+    if input.trim_start().starts_with('{') {
+        return lexicon_fact_file::parse_lexicon_facts(input);
+    }
     let mut lines = input.lines();
     let version = match lines.next() {
         Some(HEADER_V1) => 1,
         Some(HEADER_V2) => 2,
+        Some(HEADER_V3) => 3,
         _ => return Err(FactFileError::InvalidHeader),
     };
 
@@ -84,7 +94,7 @@ pub fn parse_facts(input: &str) -> Result<RepositoryFacts, FactFileError> {
             .map(|field| unescape(field, line_number))
             .collect::<Result<Vec<_>, _>>()?;
         match fields.first().map(String::as_str) {
-            Some("N") => facts.nodes.push(parse_node(&fields, line_number)?),
+            Some("N") => facts.nodes.push(parse_node(&fields, line_number, version)?),
             Some("E") => facts.edges.push(parse_edge(&fields, line_number)?),
             Some("U") if version >= 2 => facts
                 .unresolved
@@ -95,20 +105,51 @@ pub fn parse_facts(input: &str) -> Result<RepositoryFacts, FactFileError> {
     Ok(facts)
 }
 
-fn parse_node(fields: &[String], line: usize) -> Result<NodeFact, FactFileError> {
-    if fields.len() != 11 {
-        return Err(FactFileError::MalformedLine { line });
-    }
-    let path =
-        normalize_repository_path(&fields[3]).map_err(|_| FactFileError::MalformedLine { line })?;
+fn parse_node(fields: &[String], line: usize, version: u64) -> Result<NodeFact, FactFileError> {
+    let (identity_index, kind_index, path_index, name_index, content_index, span_start) =
+        if version >= 3 {
+            if fields.len() != 12 {
+                return Err(FactFileError::MalformedLine { line });
+            }
+            (Some(2), 3, 4, 5, 6, 7)
+        } else {
+            if fields.len() != 11 {
+                return Err(FactFileError::MalformedLine { line });
+            }
+            (None, 2, 3, 4, 5, 6)
+        };
+    let path = normalize_repository_path(&fields[path_index])
+        .map_err(|_| FactFileError::MalformedLine { line })?;
+    let external_identity = identity_index
+        .map(|index| parse_external_identity(&fields[index], line))
+        .transpose()?
+        .flatten();
     Ok(NodeFact {
         key: parse_id(&fields[1], line).map(NodeKey::from_u64)?,
-        kind: NodeKind::parse(&fields[2]).ok_or(FactFileError::InvalidKind { line })?,
+        external_identity,
+        kind: NodeKind::parse(&fields[kind_index]).ok_or(FactFileError::InvalidKind { line })?,
         path,
-        name: fields[4].clone(),
-        content_id: parse_optional_id(&fields[5], line)?.map(ContentId::from_u64),
-        span: parse_span(&fields[6..11], line)?,
+        name: fields[name_index].clone(),
+        content_id: parse_optional_id(&fields[content_index], line)?.map(ContentId::from_u64),
+        span: parse_span(&fields[span_start..span_start + 5], line)?,
     })
+}
+
+fn parse_external_identity(value: &str, line: usize) -> Result<Option<String>, FactFileError> {
+    if value == "-" {
+        return Ok(None);
+    }
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(FactFileError::InvalidNumber { line });
+    };
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(FactFileError::InvalidNumber { line });
+    }
+    Ok(Some(value.to_owned()))
 }
 
 fn parse_edge(fields: &[String], line: usize) -> Result<EdgeFact, FactFileError> {

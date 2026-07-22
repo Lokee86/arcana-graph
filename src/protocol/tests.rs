@@ -143,6 +143,82 @@ fn jsonl_server_continues_after_request_errors() {
     assert_eq!(responses[2]["error"]["code"], "unknown_node");
 }
 
+#[test]
+fn serves_bounded_graph_analysis_queries() {
+    let directory = TestDirectory::new();
+    let snapshot_path = directory.path.join("analysis");
+    write_snapshot(&snapshot_path, analysis_facts());
+    let snapshot = ProtocolSnapshot::open(snapshot_path).unwrap();
+
+    let paths = request(
+        &snapshot,
+        r#"{"op":"paths","from_node_id":1,"to_node_id":3,"relations":["calls"],"max_depth":4}"#,
+    );
+    assert_eq!(paths["result"]["count"], 1);
+    assert_eq!(paths["result"]["paths"][0]["depth"], 2);
+
+    let chain = request(
+        &snapshot,
+        r#"{"op":"shortest_call_chain","from_node_id":1,"to_node_id":3,"include_possible":false}"#,
+    );
+    assert_eq!(chain["result"]["found"], true);
+    assert_eq!(chain["result"]["chain"]["depth"], 2);
+
+    let reachable = request(
+        &snapshot,
+        r#"{"op":"reachability","entry_node_ids":[1],"include_possible":false}"#,
+    );
+    assert_eq!(reachable["result"]["count"], 3);
+
+    let impact = request(
+        &snapshot,
+        r#"{"op":"impact","node_id":3,"relations":["calls"]}"#,
+    );
+    assert_eq!(impact["result"]["count"], 2);
+    assert_eq!(impact["result"]["dependents"][0]["node"]["name"], "middle");
+    assert_eq!(impact["result"]["dependents"][1]["node"]["name"], "entry");
+
+    let dead = request(
+        &snapshot,
+        r#"{"op":"dead_symbols","entry_node_ids":[1],"include_possible":false}"#,
+    );
+    assert_eq!(dead["result"]["count"], 1);
+    assert_eq!(dead["result"]["dead_symbols"][0]["name"], "unused");
+
+    let role = request(
+        &snapshot,
+        r#"{"op":"operational_role","node_id":3,"entry_node_ids":[1],"include_possible":false}"#,
+    );
+    assert_eq!(role["result"]["incoming_counts"]["calls"], 1);
+    assert_eq!(role["result"]["shortest_entry_chain"]["depth"], 2);
+}
+
+fn analysis_facts() -> RepositoryFacts {
+    RepositoryFacts::new(
+        vec![
+            node(10, NodeKind::File, "src/analysis.go", "analysis.go", None),
+            node(20, NodeKind::Function, "src/analysis.go", "entry", Some(1)),
+            node(30, NodeKind::Function, "src/analysis.go", "middle", Some(2)),
+            node(40, NodeKind::Function, "src/analysis.go", "target", Some(3)),
+            node(50, NodeKind::Function, "src/analysis.go", "unused", Some(4)),
+        ],
+        vec![
+            EdgeFact {
+                source: NodeKey::from_u64(20),
+                target: NodeKey::from_u64(30),
+                relation: RelationKind::Calls,
+                span: None,
+            },
+            EdgeFact {
+                source: NodeKey::from_u64(30),
+                target: NodeKey::from_u64(40),
+                relation: RelationKind::Calls,
+                span: None,
+            },
+        ],
+    )
+}
+
 fn request(snapshot: &ProtocolSnapshot, line: &str) -> Value {
     let response = snapshot.handle_line(line);
     assert_eq!(response["protocol"], "arcana.query.v1");
@@ -255,6 +331,7 @@ fn other_facts() -> RepositoryFacts {
 fn node(key: u64, kind: NodeKind, path: &str, name: &str, content: Option<u64>) -> NodeFact {
     NodeFact {
         key: NodeKey::from_u64(key),
+        external_identity: None,
         kind,
         path: path.to_owned(),
         name: name.to_owned(),

@@ -11,17 +11,20 @@ use crate::repository::{
     normalize_repository_path,
 };
 
-const HEADER: &str = "version\t1";
+const HEADER_V1: &str = "version\t1";
+const HEADER_V2: &str = "version\t2";
 
 pub(super) fn encode(catalogue: &RepositoryCatalogue) -> Result<String, CatalogueError> {
     let validated = RepositoryCatalogue::new(catalogue.entries().to_vec())?;
-    let mut output = String::from(HEADER);
+    let mut output = String::from(HEADER_V2);
     output.push('\n');
     for entry in validated.entries() {
         output.push_str("N\t");
         push_field(&mut output, &entry.node_id.0.to_string());
         output.push('\t');
         push_field(&mut output, &format_id(entry.fact.key.0));
+        output.push('\t');
+        push_optional_field(&mut output, entry.fact.external_identity.as_deref());
         output.push('\t');
         push_field(&mut output, entry.fact.kind.as_str());
         output.push('\t');
@@ -45,9 +48,11 @@ pub(super) fn decode(input: &str) -> Result<RepositoryCatalogue, CatalogueError>
         return Err(CatalogueError::MissingFinalNewline);
     }
     let mut lines = input[..input.len() - 1].split('\n');
-    if lines.next() != Some(HEADER) {
-        return Err(CatalogueError::InvalidHeader);
-    }
+    let version = match lines.next() {
+        Some(HEADER_V1) => 1,
+        Some(HEADER_V2) => 2,
+        _ => return Err(CatalogueError::InvalidHeader),
+    };
 
     let mut entries = Vec::new();
     let mut previous_id = None;
@@ -57,7 +62,8 @@ pub(super) fn decode(input: &str) -> Result<RepositoryCatalogue, CatalogueError>
             .split('\t')
             .map(|field| unescape(field, line_number))
             .collect::<Result<Vec<_>, _>>()?;
-        if fields.len() != 12 || fields.first().map(String::as_str) != Some("N") {
+        let expected_fields = if version >= 2 { 13 } else { 12 };
+        if fields.len() != expected_fields || fields.first().map(String::as_str) != Some("N") {
             return Err(CatalogueError::MalformedLine { line: line_number });
         }
         let node_id = parse_decimal(&fields[1], line_number)?;
@@ -65,14 +71,26 @@ pub(super) fn decode(input: &str) -> Result<RepositoryCatalogue, CatalogueError>
             return Err(CatalogueError::InvalidOrder { line: line_number });
         }
         previous_id = Some(node_id);
+        let (identity_index, kind_index, path_index, name_index, content_index, span_start) =
+            if version >= 2 {
+                (Some(3), 4, 5, 6, 7, 8)
+            } else {
+                (None, 3, 4, 5, 6, 7)
+            };
+        let external_identity = identity_index
+            .map(|index| parse_external_identity(&fields[index], line_number))
+            .transpose()?
+            .flatten();
         let fact = NodeFact {
             key: NodeKey::from_u64(parse_hex(&fields[2], line_number)?),
-            kind: NodeKind::parse(&fields[3])
+            external_identity,
+            kind: NodeKind::parse(&fields[kind_index])
                 .ok_or(CatalogueError::InvalidKind { line: line_number })?,
-            path: parse_path(&fields[4], line_number)?,
-            name: fields[5].clone(),
-            content_id: parse_optional_id(&fields[6], line_number)?.map(ContentId::from_u64),
-            span: parse_span(&fields[7..12], line_number)?,
+            path: parse_path(&fields[path_index], line_number)?,
+            name: fields[name_index].clone(),
+            content_id: parse_optional_id(&fields[content_index], line_number)?
+                .map(ContentId::from_u64),
+            span: parse_span(&fields[span_start..span_start + 5], line_number)?,
         };
         entries.push(CatalogueEntry {
             node_id: NodeId(node_id),
@@ -107,6 +125,7 @@ pub enum CatalogueError {
     InvalidOrder { line: usize },
     InvalidNumber { line: usize },
     InvalidKind { line: usize },
+    InvalidExternalIdentity,
     InvalidEscape { line: usize },
     InvalidSpan { line: usize },
     InvalidPath(RepositoryPathError),
@@ -133,6 +152,9 @@ impl fmt::Display for CatalogueError {
             }
             Self::InvalidKind { line } => {
                 write!(formatter, "catalogue line {line} has an invalid node kind")
+            }
+            Self::InvalidExternalIdentity => {
+                formatter.write_str("catalogue contains an invalid external identity")
             }
             Self::InvalidEscape { line } => {
                 write!(formatter, "catalogue line {line} has an invalid escape")
@@ -206,6 +228,23 @@ fn parse_optional_id(value: &str, line: usize) -> Result<Option<u64>, CatalogueE
     }
 }
 
+fn parse_external_identity(value: &str, line: usize) -> Result<Option<String>, CatalogueError> {
+    if value == "-" {
+        return Ok(None);
+    }
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(CatalogueError::InvalidNumber { line });
+    };
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(CatalogueError::InvalidNumber { line });
+    }
+    Ok(Some(value.to_owned()))
+}
+
 fn parse_decimal(value: &str, line: usize) -> Result<u32, CatalogueError> {
     if value.is_empty()
         || (value.len() > 1 && value.starts_with('0'))
@@ -250,6 +289,10 @@ fn push_span(output: &mut String, span: Option<&SourceSpan>) {
     } else {
         output.push_str("\t-\t-\t-\t-\t-");
     }
+}
+
+fn push_optional_field(output: &mut String, value: Option<&str>) {
+    push_field(output, value.unwrap_or("-"));
 }
 
 fn push_field(output: &mut String, value: &str) {

@@ -11,6 +11,8 @@ mod fact_file_tests;
 mod incremental;
 #[cfg(test)]
 mod incremental_tests;
+#[cfg(test)]
+mod lexicon_fact_file_tests;
 mod model;
 mod ownership;
 #[cfg(test)]

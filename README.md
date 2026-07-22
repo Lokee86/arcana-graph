@@ -7,8 +7,9 @@ Grimoire Context, and Pitlord.
 
 ## Ownership boundaries
 
-- **Arcana** owns the factual repository graph, graph storage, snapshots,
-  deterministic queries, and measurements of storage representations.
+- **Lexicon** owns language parsing and the normalized symbol/relationship fact contract.
+- **Arcana** owns graph ingestion, packed storage, snapshots, deterministic traversal,
+  and measurements of storage representations.
 - **Demon Docs** owns documentation semantics, policy, review history, and
   Codemap decisions. It consumes Arcana facts without owning the graph
   engine.
@@ -94,64 +95,42 @@ manifest last. The source snapshot remains untouched.
 
 ## Repository ingestion
 
-Arcana now accepts language-neutral repository facts and compiles them into
-the same dense packed graph format used by its synthetic workloads. The compiled
-output contains:
+Arcana consumes language-neutral Lexicon facts v1 JSONL and compiles them into
+the same dense packed graph format used by its synthetic workloads. Language
+adapters live in the standalone Lexicon repository; Arcana does not own or ship
+parsers.
+
+The compiled output contains:
 
 - `graph.arcana` — packed forward and reverse adjacency;
-- `catalogue.tsv` — dense node IDs mapped back to stable keys, paths, names,
-  kinds, content IDs, and source spans;
-- `unresolved.tsv` — canonical version-2 unresolved-reference facts keyed back to
-  catalogue nodes.
-
-The first adapter uses Go's `go/parser` and `go/ast` packages for extraction and
-`golang.org/x/tools/go/packages` with Go type information for semantic call
-resolution. It emits repository, directory, file, package, import, type,
-function, method, and test nodes, plus containment, definition, import, and
-resolved call edges.
+- `catalogue.tsv` — dense node IDs mapped back to full Lexicon identities,
+  compact stable keys, paths, names, kinds, content IDs, and source spans;
+- `unresolved.tsv` — unresolved-reference evidence keyed back to catalogue nodes.
 
 ```text
-go run ./adapters/go \
-  -repo /path/to/go/module \
-  -output target/repository.facts.tsv
+lexicon-go -repo /path/to/go/module -output target/repository.facts.jsonl
 
 cargo run --release -- import-facts \
-  --facts target/repository.facts.tsv \
+  --facts target/repository.facts.jsonl \
   --output target/repository-index
 
-cargo run --release -- query \
-  --graph target/repository-index/graph.arcana \
-  --catalogue target/repository-index/catalogue.tsv \
-  --name ExampleFunction \
-  --reverse \
-  --relation calls
-```
-
-For integrations, `arcana protocol` opens the verified repository snapshot once
-and serves one JSON response for every JSON request line on standard input:
-
-```text
 cargo run --release -- protocol --snapshot target/repository-index
-{"id":"stats","op":"stats"}
 {"id":"symbol","op":"resolve_symbol","name":"ExampleFunction"}
-{"id":"calls","op":"neighbors","node_id":42,"direction":"outgoing","relation":"calls"}
-{"id":"unresolved","op":"unresolved","path":"internal/example.go","reason":"unsupported-form"}
-{"id":"diff","op":"diff","other_snapshot":"target/previous-index"}
+{"id":"chain","op":"shortest_call_chain","from_node_id":12,"to_node_id":42}
+{"id":"impact","op":"impact","node_id":42,"max_depth":8}
 ```
 
-The stable protocol identifier is `arcana.query.v1`. Supported operations are
-`resolve_symbol`, `resolve_file`, `list_nodes`, `neighbors`, `unresolved`,
-`stats`, and `diff`. Request IDs are echoed unchanged, and malformed or failed
-requests return JSON errors without terminating the stream.
+Arcana also reads its legacy TSV fact format during migration. Lexicon SHA-256
+identities remain the durable cross-tool identity; Arcana compacts them into
+snapshot-local packed IDs and rejects any detected compaction collision.
 
-The Go resolver handles concrete same-package and internal cross-package
-functions and methods, including recursive self-calls. Built-ins, type
-conversions, external APIs, dynamic dispatch, ambiguity, and missing targets are
-retained as first-class unresolved-reference facts rather than becoming
-speculative graph edges. Anonymous function bodies remain outside the graph
-until closures have their own node model. See
-[`docs/GO_ADAPTER_VALIDATION.md`](docs/GO_ADAPTER_VALIDATION.md) for measured
-results on Demon Docs and the Space Rocks game server.
+The stable protocol identifier is `arcana.query.v1`. In addition to symbol,
+file, neighbor, unresolved, statistics, and snapshot-diff operations, it supports
+bounded multi-hop paths, entry-point reachability, transitive impact, shortest
+call chains, dead-symbol detection, and operational-role summaries.
+
+See [`docs/LEXICON_CONTRACT.md`](docs/LEXICON_CONTRACT.md) for the exact consumer
+boundary and incremental ownership policy.
 
 ## Benchmarks
 
@@ -176,17 +155,6 @@ changes, hub-focused changes, and one percent of all edges. Each run measures
 creation, fully validated reopen, warm forward/reverse queries, and incremental
 file size. Overlay and rebuilt-packed results must produce identical visible
 graph checksums and query fingerprints.
-
-## Next implementation steps
-
-1. Resolve Go selector calls, methods, and internal cross-package calls without
-   emitting speculative edges.
-2. Convert file-level fact changes into overlays instead of rebuilding the full
-   repository fact set.
-3. Bind catalogues cryptographically to their packed graph artifacts and publish
-   them through the snapshot manifest.
-4. Define compaction triggers from real mutation rates and query mixes.
-5. Add the Rust adapter through the same language-neutral fact boundary.
 
 ## Development
 

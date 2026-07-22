@@ -102,6 +102,7 @@ fn import_and_query_round_trip() {
         nodes: vec![
             NodeFact {
                 key: caller,
+                external_identity: None,
                 kind: NodeKind::Function,
                 path: "src/lib.go".to_owned(),
                 name: "caller".to_owned(),
@@ -110,6 +111,7 @@ fn import_and_query_round_trip() {
             },
             NodeFact {
                 key: callee,
+                external_identity: None,
                 kind: NodeKind::Function,
                 path: "src/lib.go".to_owned(),
                 name: "callee".to_owned(),

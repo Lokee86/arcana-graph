@@ -106,6 +106,18 @@ pub fn read_catalogue(path: impl AsRef<Path>) -> Result<RepositoryCatalogue, Cat
 }
 
 fn validate_fact(fact: &NodeFact) -> Result<(), CatalogueError> {
+    if let Some(identity) = &fact.external_identity {
+        let Some(digest) = identity.strip_prefix("sha256:") else {
+            return Err(CatalogueError::InvalidExternalIdentity);
+        };
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(CatalogueError::InvalidExternalIdentity);
+        }
+    }
     let normalized = normalize_repository_path(&fact.path).map_err(CatalogueError::InvalidPath)?;
     if normalized != fact.path {
         return Err(CatalogueError::InvalidPath(

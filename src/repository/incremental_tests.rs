@@ -50,6 +50,7 @@ fn facts(
         nodes: vec![
             NodeFact {
                 key: repository,
+                external_identity: None,
                 kind: NodeKind::Repository,
                 path: "repo".to_owned(),
                 name: "repo".to_owned(),
@@ -58,6 +59,7 @@ fn facts(
             },
             NodeFact {
                 key: first,
+                external_identity: None,
                 kind: NodeKind::Function,
                 path: "a.go".to_owned(),
                 name: "a".to_owned(),
@@ -66,6 +68,7 @@ fn facts(
             },
             NodeFact {
                 key: second,
+                external_identity: None,
                 kind: NodeKind::Function,
                 path: "b.go".to_owned(),
                 name: "b".to_owned(),

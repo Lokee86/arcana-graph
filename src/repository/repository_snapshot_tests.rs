@@ -46,6 +46,7 @@ fn sample_facts() -> RepositoryFacts {
         nodes: vec![
             NodeFact {
                 key: NodeKey::from_u64(1),
+                external_identity: None,
                 kind: NodeKind::Repository,
                 path: "repo".to_owned(),
                 name: "repo".to_owned(),
@@ -54,6 +55,7 @@ fn sample_facts() -> RepositoryFacts {
             },
             NodeFact {
                 key: NodeKey::from_u64(2),
+                external_identity: None,
                 kind: NodeKind::Function,
                 path: "a.go".to_owned(),
                 name: "a".to_owned(),
@@ -62,6 +64,7 @@ fn sample_facts() -> RepositoryFacts {
             },
             NodeFact {
                 key: NodeKey::from_u64(3),
+                external_identity: None,
                 kind: NodeKind::Function,
                 path: "b.go".to_owned(),
                 name: "b".to_owned(),

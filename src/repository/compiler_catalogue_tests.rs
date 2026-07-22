@@ -41,6 +41,31 @@ fn compiler_assigns_dense_ids_and_stable_relation_codes() {
 }
 
 #[test]
+fn compiler_preserves_recursive_self_edges() {
+    let key = NodeKey::from_identity("recursive");
+    let facts = RepositoryFacts {
+        nodes: vec![node(key, "recursive.go")],
+        edges: vec![EdgeFact {
+            source: key,
+            target: key,
+            relation: RelationKind::Calls,
+            span: None,
+        }],
+        unresolved: Vec::new(),
+    };
+
+    let compiled = compile_repository_facts(&facts).unwrap();
+    assert_eq!(
+        compiled.dataset.edges,
+        vec![crate::synthetic::Edge {
+            source: NodeId(0),
+            target: NodeId(0),
+            kind: EdgeKind(5),
+        }]
+    );
+}
+
+#[test]
 fn compiler_rejects_invalid_facts() {
     let key = NodeKey::from_identity("node");
     let base = node(key, "a.rs");
@@ -60,14 +85,6 @@ fn compiler_rejects_invalid_facts() {
         compile_repository_facts(&RepositoryFacts {
             nodes: vec![base.clone()],
             edges: vec![edge(key, NodeKey::from_u64(99))],
-            unresolved: Vec::new(),
-        })
-        .is_err()
-    );
-    assert!(
-        compile_repository_facts(&RepositoryFacts {
-            nodes: vec![base],
-            edges: vec![edge(key, key)],
             unresolved: Vec::new(),
         })
         .is_err()

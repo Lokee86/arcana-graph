@@ -22,6 +22,7 @@ mod repository_snapshot_format;
 #[cfg(test)]
 mod repository_snapshot_tests;
 mod repository_snapshot_validation;
+mod unresolved;
 
 pub use catalogue::{
     CatalogueEntry, CatalogueError, RepositoryCatalogue, read_catalogue, write_catalogue,
@@ -33,10 +34,7 @@ pub use compiler::{
 pub use fact_file::{FACT_SCHEMA_VERSION, encode_facts, parse_facts};
 pub use fact_file_error::FactFileError;
 pub use incremental::{IncrementalError, IncrementalUpdate, plan_file_update};
-pub use model::{
-    ContentId, EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, SourceSpan, UnresolvedReason,
-    UnresolvedReferenceFact,
-};
+pub use model::{ContentId, EdgeFact, NodeFact, NodeKey, NodeKind, RelationKind, SourceSpan};
 pub use ownership::{FactOwnershipError, FactPartitions, partition_facts, replace_changed_files};
 pub use path::{RepositoryPathError, normalize_repository_path};
 pub use repository_snapshot::{
@@ -45,6 +43,7 @@ pub use repository_snapshot::{
 };
 pub use repository_snapshot_error::RepositorySnapshotError;
 pub use repository_snapshot_format::{REPOSITORY_MANIFEST_VERSION, RepositorySnapshotManifest};
+pub use unresolved::{UnresolvedReason, UnresolvedReferenceFact};
 
 /// The complete set of facts extracted from one repository.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

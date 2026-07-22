@@ -162,6 +162,20 @@ fn logical_edge_order_does_not_change_packed_bytes() {
 }
 
 #[test]
+fn self_edges_round_trip() {
+    let dataset = GraphDataset {
+        node_count: 2,
+        edges: vec![Edge {
+            source: NodeId(1),
+            target: NodeId(1),
+            kind: EdgeKind(7),
+        }],
+    };
+
+    assert_round_trip(&dataset, "self-edge");
+}
+
+#[test]
 fn writer_rejects_invalid_datasets() {
     let invalid = [
         (
@@ -174,17 +188,6 @@ fn writer_rejects_invalid_datasets() {
                 }],
             },
             "range",
-        ),
-        (
-            GraphDataset {
-                node_count: 2,
-                edges: vec![Edge {
-                    source: NodeId(1),
-                    target: NodeId(1),
-                    kind: EdgeKind(0),
-                }],
-            },
-            "self",
         ),
         (
             GraphDataset {
@@ -211,9 +214,7 @@ fn writer_rejects_invalid_datasets() {
         assert!(matches!(
             write_packed(path.as_path(), &dataset),
             Err(PackedError::Dataset(
-                DatasetError::EndpointOutOfRange { .. }
-                    | DatasetError::SelfEdge { .. }
-                    | DatasetError::DuplicateEdge { .. }
+                DatasetError::EndpointOutOfRange { .. } | DatasetError::DuplicateEdge { .. }
             ))
         ));
         assert!(!path.as_path().exists());

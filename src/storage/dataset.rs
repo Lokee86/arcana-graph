@@ -14,9 +14,6 @@ pub(crate) fn canonical_edges(dataset: &GraphDataset) -> Result<Vec<Edge>, Datas
                 node_count: dataset.node_count,
             });
         }
-        if edge.source == edge.target {
-            return Err(DatasetError::SelfEdge { edge: *edge });
-        }
     }
 
     if let Some(pair) = edges.windows(2).find(|pair| pair[0] == pair[1]) {

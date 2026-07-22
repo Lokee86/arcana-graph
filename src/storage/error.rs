@@ -14,7 +14,6 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DatasetError {
     EndpointOutOfRange { edge: Edge, node_count: u32 },
-    SelfEdge { edge: Edge },
     DuplicateEdge { edge: Edge },
 }
 
@@ -26,13 +25,6 @@ impl fmt::Display for DatasetError {
                 "edge {} -> {} references outside {} nodes",
                 edge.source.0, edge.target.0, node_count
             ),
-            Self::SelfEdge { edge } => {
-                write!(
-                    formatter,
-                    "self-edge at node {} is not supported",
-                    edge.source.0
-                )
-            }
             Self::DuplicateEdge { edge } => write!(
                 formatter,
                 "duplicate edge {} -> {} of kind {}",
@@ -109,10 +101,6 @@ pub enum PackedError {
         neighbor: NodeId,
         node_count: u32,
     },
-    SelfEdge {
-        direction: Direction,
-        node: NodeId,
-    },
     UnsortedAdjacency {
         direction: Direction,
         node: NodeId,
@@ -172,13 +160,6 @@ impl fmt::Display for PackedError {
                 "{direction:?} adjacency for node {} references node {} outside {} nodes",
                 node.0, neighbor.0, node_count
             ),
-            Self::SelfEdge { direction, node } => {
-                write!(
-                    formatter,
-                    "{direction:?} adjacency contains self-edge at node {}",
-                    node.0
-                )
-            }
             Self::UnsortedAdjacency { direction, node } => write!(
                 formatter,
                 "{direction:?} adjacency for node {} is unsorted or duplicated",

@@ -16,6 +16,8 @@ import (
 type Summary struct {
 	Nodes, Edges, DirectCalls, CallExpressions, UnresolvedCalls int
 	Directories, Files, Packages, Imports                       int
+	BuiltinCalls, ConversionCalls, ExternalCalls, DynamicCalls  int
+	SemanticErrors                                              int
 }
 
 type packageInfo struct {
@@ -33,15 +35,16 @@ type callable struct {
 }
 
 type scanner struct {
-	root, module string
-	set          *token.FileSet
-	facts        RepositoryFacts
-	nodes        map[NodeKey]NodeFact
-	edges        map[string]EdgeFact
-	packages     map[string]packageInfo
-	callables    []callable
-	targets      map[string]map[string][]NodeKey
-	summary      Summary
+	root, module  string
+	set           *token.FileSet
+	facts         RepositoryFacts
+	nodes         map[NodeKey]NodeFact
+	edges         map[string]EdgeFact
+	packages      map[string]packageInfo
+	callables     []callable
+	targets       map[string]map[string][]NodeKey
+	semanticCalls map[string]semanticCall
+	summary       Summary
 }
 
 func scanRepository(root string) (RepositoryFacts, Summary, error) {
@@ -57,6 +60,7 @@ func scanRepository(root string) (RepositoryFacts, Summary, error) {
 		root: root, module: module, set: token.NewFileSet(),
 		nodes: make(map[NodeKey]NodeFact), edges: make(map[string]EdgeFact),
 		packages: make(map[string]packageInfo), targets: make(map[string]map[string][]NodeKey),
+		semanticCalls: make(map[string]semanticCall),
 	}
 	files, dirs, err := discover(root)
 	if err != nil {
@@ -76,6 +80,9 @@ func scanRepository(root string) (RepositoryFacts, Summary, error) {
 				return RepositoryFacts{}, Summary{}, err
 			}
 		}
+	}
+	if err := s.loadSemanticCalls(); err != nil {
+		return RepositoryFacts{}, Summary{}, err
 	}
 	s.addCallEdges()
 	for _, node := range s.nodes {
@@ -200,9 +207,6 @@ func (s *scanner) addNode(node NodeFact) {
 }
 
 func (s *scanner) addEdge(source, target NodeKey, relation RelationKind, span *SourceSpan) {
-	if source == target {
-		return
-	}
 	key := fmt.Sprintf("%016x/%016x/%s", source, target, relation)
 	if _, exists := s.edges[key]; !exists {
 		s.edges[key] = EdgeFact{Source: source, Target: target, Relation: relation, Span: span}

@@ -27,9 +27,6 @@ pub enum RepositoryCompileError {
     MissingUnresolvedSource {
         key: NodeKey,
     },
-    SelfEdge {
-        key: NodeKey,
-    },
     DuplicateEdge {
         source: NodeKey,
         target: NodeKey,
@@ -52,7 +49,6 @@ impl fmt::Display for RepositoryCompileError {
                 formatter,
                 "unresolved reference has missing source node key {key:?}"
             ),
-            Self::SelfEdge { key } => write!(formatter, "node key {key:?} has a self-edge"),
             Self::DuplicateEdge {
                 source,
                 target,
@@ -103,9 +99,6 @@ pub fn compile_repository_facts(
         let target = *node_ids
             .get(&edge.target)
             .ok_or(RepositoryCompileError::MissingEdgeEndpoint { key: edge.target })?;
-        if source == target {
-            return Err(RepositoryCompileError::SelfEdge { key: edge.source });
-        }
         graph_edges.push(Edge {
             source,
             target,

@@ -104,9 +104,11 @@ output contains:
 - `unresolved.tsv` — canonical version-2 unresolved-reference facts keyed back to
   catalogue nodes.
 
-The first adapter uses Go's standard `go/parser` and `go/ast` packages. It emits
-repository, directory, file, package, import, type, function, method, and test
-nodes, plus containment, definition, import, and conservative direct-call edges.
+The first adapter uses Go's `go/parser` and `go/ast` packages for extraction and
+`golang.org/x/tools/go/packages` with Go type information for semantic call
+resolution. It emits repository, directory, file, package, import, type,
+function, method, and test nodes, plus containment, definition, import, and
+resolved call edges.
 
 ```text
 go run ./adapters/go \
@@ -125,14 +127,14 @@ cargo run --release -- query \
   --relation calls
 ```
 
-The current Go call resolver deliberately emits only unambiguous, unqualified,
-same-package function calls. Selector calls, method dispatch, built-ins,
-cross-package calls, closures, and recursive self-calls are retained as
-first-class unresolved-reference facts rather than becoming speculative graph
-edges. Each unresolved fact records its source, intended relation, expression,
-candidate namespace and name when available, reason, and source span. See
-[`docs/GO_ADAPTER_VALIDATION.md`](docs/GO_ADAPTER_VALIDATION.md) for the first
-real-repository results.
+The Go resolver handles concrete same-package and internal cross-package
+functions and methods, including recursive self-calls. Built-ins, type
+conversions, external APIs, dynamic dispatch, ambiguity, and missing targets are
+retained as first-class unresolved-reference facts rather than becoming
+speculative graph edges. Anonymous function bodies remain outside the graph
+until closures have their own node model. See
+[`docs/GO_ADAPTER_VALIDATION.md`](docs/GO_ADAPTER_VALIDATION.md) for measured
+results on Demon Docs and the Space Rocks game server.
 
 ## Benchmarks
 

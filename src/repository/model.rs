@@ -206,57 +206,6 @@ pub struct EdgeFact {
     pub span: Option<SourceSpan>,
 }
 
-/// Why an adapter could not resolve a symbolic relationship target.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub enum UnresolvedReason {
-    MissingTarget,
-    AmbiguousTarget,
-    UnsupportedForm,
-    DynamicTarget,
-    ExternalTarget,
-    BuiltinTarget,
-    SelfTarget,
-}
-
-impl UnresolvedReason {
-    pub(crate) fn as_str(&self) -> &'static str {
-        match self {
-            Self::MissingTarget => "missing-target",
-            Self::AmbiguousTarget => "ambiguous-target",
-            Self::UnsupportedForm => "unsupported-form",
-            Self::DynamicTarget => "dynamic-target",
-            Self::ExternalTarget => "external-target",
-            Self::BuiltinTarget => "builtin-target",
-            Self::SelfTarget => "self-target",
-        }
-    }
-
-    pub(crate) fn parse(value: &str) -> Option<Self> {
-        Some(match value {
-            "missing-target" => Self::MissingTarget,
-            "ambiguous-target" => Self::AmbiguousTarget,
-            "unsupported-form" => Self::UnsupportedForm,
-            "dynamic-target" => Self::DynamicTarget,
-            "external-target" => Self::ExternalTarget,
-            "builtin-target" => Self::BuiltinTarget,
-            "self-target" => Self::SelfTarget,
-            _ => return None,
-        })
-    }
-}
-
-/// A symbolic relationship that an adapter observed but could not resolve safely.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct UnresolvedReferenceFact {
-    pub source: NodeKey,
-    pub relation: RelationKind,
-    pub expression: String,
-    pub candidate_namespace: Option<String>,
-    pub candidate_name: Option<String>,
-    pub reason: UnresolvedReason,
-    pub span: Option<SourceSpan>,
-}
-
 fn stable_hash(bytes: &[u8]) -> u64 {
     let mut hasher = StableHasher::new();
     hasher.update(bytes);

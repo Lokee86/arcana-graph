@@ -146,14 +146,14 @@ pub(crate) fn graph_neighbors(
     direction: QueryDirection,
     allowed: Option<RelationMask>,
 ) -> Result<Vec<(NodeId, RelationKind)>, RequestFailure> {
-    let raw = match direction {
-        QueryDirection::Outgoing => snapshot.graph.forward_neighbors(node),
-        QueryDirection::Incoming => snapshot.graph.reverse_neighbors(node),
+    let neighbors = match direction {
+        QueryDirection::Outgoing => snapshot.graph.forward_neighbors_iter(node),
+        QueryDirection::Incoming => snapshot.graph.reverse_neighbors_iter(node),
     }
     .map_err(|error| RequestFailure::new("query_failed", error.to_string()))?;
 
     let mut result = Vec::new();
-    for neighbor in raw {
+    for neighbor in neighbors {
         let relation = edge_kind_to_relation(neighbor.kind).ok_or_else(|| {
             RequestFailure::new(
                 "corrupt_graph",

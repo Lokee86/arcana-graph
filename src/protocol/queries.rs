@@ -92,8 +92,8 @@ impl ProtocolSnapshot {
         })?;
         let wanted = parse_relation(relation)?;
         let neighbors = match direction {
-            QueryDirection::Outgoing => self.graph.forward_neighbors(node_id),
-            QueryDirection::Incoming => self.graph.reverse_neighbors(node_id),
+            QueryDirection::Outgoing => self.graph.forward_neighbors_iter(node_id),
+            QueryDirection::Incoming => self.graph.reverse_neighbors_iter(node_id),
         }
         .map_err(|error| RequestFailure::new("query_failed", error.to_string()))?;
 

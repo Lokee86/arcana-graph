@@ -1,6 +1,8 @@
 use std::path::{Component, Path, PathBuf};
 
-use crate::storage::{Direction, Neighbor, PackedGraph, QueryError, StableHasher};
+use crate::storage::{
+    Direction, Neighbor, PackedGraph, PackedNeighborIter, QueryError, StableHasher,
+};
 use crate::synthetic::{Edge, GraphDataset, NodeId};
 
 use super::{GraphOverlay, SnapshotError, SnapshotManifest, read_manifest, write_manifest};
@@ -11,6 +13,32 @@ pub struct GraphSnapshot {
     base: PackedGraph,
     overlay: Option<GraphOverlay>,
 }
+
+#[derive(Debug)]
+pub enum VisibleNeighborIter<'a> {
+    Base(PackedNeighborIter<'a>),
+    Owned(std::vec::IntoIter<Neighbor>),
+}
+
+impl Iterator for VisibleNeighborIter<'_> {
+    type Item = Neighbor;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Base(iter) => iter.next(),
+            Self::Owned(iter) => iter.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Base(iter) => iter.size_hint(),
+            Self::Owned(iter) => iter.size_hint(),
+        }
+    }
+}
+
+impl ExactSizeIterator for VisibleNeighborIter<'_> {}
 
 impl GraphSnapshot {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, SnapshotError> {
@@ -53,11 +81,25 @@ impl GraphSnapshot {
     }
 
     pub fn forward_neighbors(&self, node: NodeId) -> Result<Vec<Neighbor>, QueryError> {
-        self.neighbors(node, Direction::Forward)
+        Ok(self.forward_neighbors_iter(node)?.collect())
     }
 
     pub fn reverse_neighbors(&self, node: NodeId) -> Result<Vec<Neighbor>, QueryError> {
-        self.neighbors(node, Direction::Reverse)
+        Ok(self.reverse_neighbors_iter(node)?.collect())
+    }
+
+    pub fn forward_neighbors_iter(
+        &self,
+        node: NodeId,
+    ) -> Result<VisibleNeighborIter<'_>, QueryError> {
+        self.neighbors_iter(node, Direction::Forward)
+    }
+
+    pub fn reverse_neighbors_iter(
+        &self,
+        node: NodeId,
+    ) -> Result<VisibleNeighborIter<'_>, QueryError> {
+        self.neighbors_iter(node, Direction::Reverse)
     }
 
     pub fn materialize_base_dataset(&self) -> Result<GraphDataset, QueryError> {
@@ -77,15 +119,31 @@ impl GraphSnapshot {
         })
     }
 
-    fn neighbors(&self, node: NodeId, direction: Direction) -> Result<Vec<Neighbor>, QueryError> {
-        let base_neighbors = match direction {
-            Direction::Forward => self.base.forward_neighbors(node)?,
-            Direction::Reverse => self.base.reverse_neighbors(node)?,
-        };
-        Ok(match &self.overlay {
-            Some(overlay) => overlay.merge_owned(direction, node, base_neighbors),
-            None => base_neighbors,
-        })
+    fn neighbors_iter(
+        &self,
+        node: NodeId,
+        direction: Direction,
+    ) -> Result<VisibleNeighborIter<'_>, QueryError> {
+        match &self.overlay {
+            Some(overlay) => {
+                let base_neighbors = match direction {
+                    Direction::Forward => self.base.forward_neighbors(node)?,
+                    Direction::Reverse => self.base.reverse_neighbors(node)?,
+                };
+                Ok(VisibleNeighborIter::Owned(
+                    overlay
+                        .merge_owned(direction, node, base_neighbors)
+                        .into_iter(),
+                ))
+            }
+            None => {
+                let base_neighbors = match direction {
+                    Direction::Forward => self.base.forward_neighbors_iter(node)?,
+                    Direction::Reverse => self.base.reverse_neighbors_iter(node)?,
+                };
+                Ok(VisibleNeighborIter::Base(base_neighbors))
+            }
+        }
     }
 }
 

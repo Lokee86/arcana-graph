@@ -24,7 +24,7 @@ mod overlay_tests;
 pub use crate::storage::{Direction, Neighbor};
 pub use compaction::compact_snapshot;
 pub use error::ManifestError;
-pub use graph::{GraphSnapshot, derive_snapshot_id, publish_snapshot};
+pub use graph::{GraphSnapshot, VisibleNeighborIter, derive_snapshot_id, publish_snapshot};
 pub use graph_error::SnapshotError;
 pub use manifest::{MANIFEST_VERSION, Manifest, SnapshotManifest};
 pub use manifest_io::{read_manifest, write_manifest};

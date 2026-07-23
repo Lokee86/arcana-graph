@@ -21,7 +21,7 @@ pub struct ProtocolSnapshot {
     pub(crate) graph: GraphSnapshot,
     pub(crate) catalogue: RepositoryCatalogue,
     pub(crate) unresolved: Vec<UnresolvedReferenceFact>,
-    pub(crate) node_ids: BTreeMap<NodeKey, NodeId>,
+    pub(crate) unresolved_by_source: BTreeMap<NodeKey, Vec<usize>>,
 }
 
 impl ProtocolSnapshot {
@@ -34,18 +34,20 @@ impl ProtocolSnapshot {
         let catalogue = repository.catalogue().clone();
         let unresolved = repository.unresolved().unresolved.clone();
 
-        let node_ids = catalogue
-            .entries()
-            .iter()
-            .map(|entry| (entry.fact.key, entry.node_id))
-            .collect::<BTreeMap<_, _>>();
         for reference in &unresolved {
-            if !node_ids.contains_key(&reference.source) {
+            if catalogue.node_id_by_key(reference.source).is_none() {
                 return Err(ProtocolError::InvalidSnapshot(format!(
                     "unresolved source {:016x} is absent from the catalogue",
                     reference.source.0
                 )));
             }
+        }
+        let mut unresolved_by_source = BTreeMap::new();
+        for (index, reference) in unresolved.iter().enumerate() {
+            unresolved_by_source
+                .entry(reference.source)
+                .or_insert_with(Vec::new)
+                .push(index);
         }
 
         Ok(Self {
@@ -53,7 +55,7 @@ impl ProtocolSnapshot {
             graph,
             catalogue,
             unresolved,
-            node_ids,
+            unresolved_by_source,
         })
     }
 
@@ -183,7 +185,7 @@ impl ProtocolSnapshot {
     }
 
     pub(crate) fn node_id(&self, key: NodeKey) -> Option<NodeId> {
-        self.node_ids.get(&key).copied()
+        self.catalogue.node_id_by_key(key)
     }
 }
 

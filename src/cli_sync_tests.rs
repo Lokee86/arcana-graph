@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use arcana::repository::RepositorySnapshot;
+use arcana::repository::{NodeKind, RelationKind, RepositorySnapshot};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -143,4 +143,158 @@ impl Drop for TestDirectory {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
+}
+
+#[test]
+fn sync_builds_graph_from_typescript_exports_and_gdscript_signals() {
+    let directory = TestDirectory::new();
+    let lexicon = directory.path.join(".lexicon");
+    let state = directory.path.join(".arcana");
+    fs::create_dir_all(lexicon.join("objects")).unwrap();
+    fs::create_dir_all(lexicon.join("snapshots")).unwrap();
+
+    let repository_id = sha_id("mixed-repository");
+    let export_id = sha_id("typescript-export");
+    let signal_id = sha_id("gdscript-signal");
+    let caller_id = sha_id("typescript-caller");
+    let callee_id = sha_id("gdscript-callee");
+    let repository = json!({
+        "record": "node",
+        "id": repository_id,
+        "kind": "repository",
+        "path": ".lexicon-repository",
+        "name": "example/mixed",
+        "qualified_name": "example/mixed"
+    });
+    let gdscript_object = write_language_object(
+        &lexicon,
+        "gdscript",
+        vec![
+            repository.clone(),
+            json!({
+                "record": "node",
+                "id": signal_id,
+                "kind": "signal",
+                "path": "src/player.gd",
+                "name": "finished",
+                "qualified_name": "Player.finished"
+            }),
+            json!({
+                "record": "node",
+                "id": callee_id,
+                "kind": "method",
+                "path": "src/player.gd",
+                "name": "finish",
+                "qualified_name": "Player.finish"
+            }),
+        ],
+    );
+    let typescript_object = write_language_object(
+        &lexicon,
+        "typescript",
+        vec![
+            repository,
+            json!({
+                "record": "node",
+                "id": export_id,
+                "kind": "export",
+                "path": "src/api.ts",
+                "name": "run",
+                "qualified_name": "src/api.ts::run"
+            }),
+            json!({
+                "record": "node",
+                "id": caller_id,
+                "kind": "function",
+                "path": "src/api.ts",
+                "name": "run",
+                "qualified_name": "src/api.ts::run_impl"
+            }),
+            json!({
+                "record": "edge",
+                "relation": "calls",
+                "source": caller_id,
+                "target": callee_id
+            }),
+        ],
+    );
+    let manifest = json!({
+        "version": 1,
+        "state_commit": "state",
+        "languages": [
+            language_entry("gdscript", gdscript_object),
+            language_entry("typescript", typescript_object)
+        ]
+    });
+    let snapshot_id = write_snapshot(&lexicon, &manifest);
+    fs::write(lexicon.join("CURRENT"), format!("{snapshot_id}\n")).unwrap();
+
+    run_sync(&SyncCommand {
+        lexicon,
+        state: state.clone(),
+        register: false,
+    })
+    .unwrap();
+
+    let digest = snapshot_id.strip_prefix("sha256:").unwrap();
+    let snapshot = RepositorySnapshot::open(
+        state
+            .join("snapshots")
+            .join(digest)
+            .join("repository.manifest"),
+    )
+    .unwrap();
+    assert!(
+        snapshot
+            .facts()
+            .nodes
+            .iter()
+            .any(|node| node.kind == NodeKind::Export)
+    );
+    assert!(
+        snapshot
+            .facts()
+            .nodes
+            .iter()
+            .any(|node| node.kind == NodeKind::Signal)
+    );
+    assert!(
+        snapshot
+            .facts()
+            .edges
+            .iter()
+            .any(|edge| edge.relation == RelationKind::Calls)
+    );
+}
+
+fn write_language_object(root: &Path, language: &str, records: Vec<Value>) -> String {
+    let object = json!({
+        "version": 1,
+        "language": language,
+        "owner": null,
+        "source_content_id": null,
+        "adapter_version": "1",
+        "schema_version": 1,
+        "analysis_config_id": sha_id("config"),
+        "records": records
+    });
+    let bytes = serde_json::to_vec(&object).unwrap();
+    let id = domain_id("lexicon:fact-object:v1\0", &bytes);
+    let digest = id.strip_prefix("sha256:").unwrap();
+    let directory = root.join("objects").join(&digest[..2]);
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(directory.join(&digest[2..]), bytes).unwrap();
+    id
+}
+
+fn language_entry(language: &str, object_id: String) -> Value {
+    json!({
+        "language": language,
+        "adapter_version": "1",
+        "schema_version": 1,
+        "repository": "example/mixed",
+        "analysis_config_id": sha_id("config"),
+        "shared_object_id": object_id,
+        "files": []
+    })
 }

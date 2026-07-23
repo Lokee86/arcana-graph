@@ -62,8 +62,10 @@ pub enum NodeKind {
     Field,
     Variable,
     Constant,
+    Signal,
     Parameter,
     Import,
+    Export,
     Test,
 }
 
@@ -85,8 +87,10 @@ impl NodeKind {
             Self::Field => "field",
             Self::Variable => "variable",
             Self::Constant => "constant",
+            Self::Signal => "signal",
             Self::Parameter => "parameter",
             Self::Import => "import",
+            Self::Export => "export",
             Self::Test => "test",
         }
     }
@@ -108,8 +112,10 @@ impl NodeKind {
             "field" => Self::Field,
             "variable" => Self::Variable,
             "constant" => Self::Constant,
+            "signal" => Self::Signal,
             "parameter" => Self::Parameter,
             "import" => Self::Import,
+            "export" => Self::Export,
             "test" => Self::Test,
             _ => return None,
         })

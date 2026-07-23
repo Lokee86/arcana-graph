@@ -14,7 +14,7 @@ mod tests;
 
 pub use error::{DatasetError, Direction, PackedError, QueryError};
 pub use oracle::InMemoryGraph;
-pub use reader::PackedGraph;
+pub use reader::{PackedGraph, PackedNeighborIter};
 pub use writer::{WriteSummary, write_packed};
 
 pub(crate) use dataset::{canonical_edges, dataset_checksum};

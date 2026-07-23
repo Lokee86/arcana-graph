@@ -30,9 +30,8 @@ impl ProtocolSnapshot {
         let root = root.as_ref().to_path_buf();
         let repository = RepositorySnapshot::open(root.join(REPOSITORY_MANIFEST_FILE))
             .map_err(|error| ProtocolError::InvalidSnapshot(error.to_string()))?;
-        let graph = repository.graph().clone();
-        let catalogue = repository.catalogue().clone();
-        let unresolved = repository.unresolved().unresolved.clone();
+        let (graph, catalogue, unresolved_facts) = repository.into_protocol_parts();
+        let unresolved = unresolved_facts.unresolved;
 
         let node_ids = catalogue
             .entries()

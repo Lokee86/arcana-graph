@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::synthetic::{EdgeKind, NodeId};
 
@@ -11,13 +12,15 @@ use super::{Direction, Neighbor, PackedError, QueryError};
 /// Validated packed graph backed by one immutable byte buffer.
 #[derive(Clone, Debug)]
 pub struct PackedGraph {
-    bytes: Vec<u8>,
+    // A read-only mmap would require unsafe code (directly or through an mmap
+    // implementation), which is incompatible with Arcana's unsafe-code lint.
+    bytes: Arc<[u8]>,
     header: Header,
 }
 
 impl PackedGraph {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, PackedError> {
-        let bytes = fs::read(path)?;
+        let bytes: Arc<[u8]> = fs::read(path)?.into();
         let header = Header::decode(&bytes)?;
         validate_file(&bytes, header)?;
         Ok(Self { bytes, header })
@@ -43,7 +46,25 @@ impl PackedGraph {
         self.neighbors(node, Direction::Reverse)
     }
 
-    fn neighbors(&self, node: NodeId, direction: Direction) -> Result<Vec<Neighbor>, QueryError> {
+    pub fn forward_neighbors_iter(
+        &self,
+        node: NodeId,
+    ) -> Result<PackedNeighborIter<'_>, QueryError> {
+        self.neighbors_iter(node, Direction::Forward)
+    }
+
+    pub fn reverse_neighbors_iter(
+        &self,
+        node: NodeId,
+    ) -> Result<PackedNeighborIter<'_>, QueryError> {
+        self.neighbors_iter(node, Direction::Reverse)
+    }
+
+    pub fn neighbors_iter(
+        &self,
+        node: NodeId,
+        direction: Direction,
+    ) -> Result<PackedNeighborIter<'_>, QueryError> {
         if node.0 >= self.header.node_count {
             return Err(QueryError::InvalidNode {
                 node,
@@ -54,14 +75,74 @@ impl PackedGraph {
         let (offset_base, node_base, kind_base) = section_bases(self.header.layout, direction);
         let start = read_offset(&self.bytes, offset_base, node.0);
         let end = read_offset(&self.bytes, offset_base, node.0 + 1);
-        let mut neighbors = Vec::with_capacity((end - start) as usize);
-        for index in start..end {
-            neighbors.push(Neighbor {
-                node: NodeId(read_node(&self.bytes, node_base, index)),
-                kind: EdgeKind(read_kind(&self.bytes, kind_base, index)),
-            });
+        Ok(PackedNeighborIter {
+            bytes: &self.bytes,
+            node_base,
+            kind_base,
+            next: start,
+            end,
+        })
+    }
+
+    fn neighbors(&self, node: NodeId, direction: Direction) -> Result<Vec<Neighbor>, QueryError> {
+        Ok(self.neighbors_iter(node, direction)?.collect())
+    }
+}
+
+/// Borrowed iterator over one node's packed adjacency section.
+#[derive(Debug)]
+pub struct PackedNeighborIter<'a> {
+    bytes: &'a [u8],
+    node_base: u64,
+    kind_base: u64,
+    next: u64,
+    end: u64,
+}
+
+impl Iterator for PackedNeighborIter<'_> {
+    type Item = Neighbor;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next == self.end {
+            return None;
         }
-        Ok(neighbors)
+        let index = self.next;
+        self.next += 1;
+        Some(Neighbor {
+            node: NodeId(read_node(self.bytes, self.node_base, index)),
+            kind: EdgeKind(read_kind(self.bytes, self.kind_base, index)),
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = (self.end - self.next) as usize;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for PackedNeighborIter<'_> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cloned_packed_graphs_share_immutable_backing_bytes() {
+        let layout = Layout::for_counts(0, 0).unwrap();
+        let bytes: Arc<[u8]> = vec![0; layout.file_len as usize].into();
+        let graph = PackedGraph {
+            bytes,
+            header: Header {
+                node_count: 0,
+                edge_count: 0,
+                dataset_checksum: 0,
+                payload_checksum: 0,
+                layout,
+            },
+        };
+        let clone = graph.clone();
+
+        assert!(Arc::ptr_eq(&graph.bytes, &clone.bytes));
     }
 }
 

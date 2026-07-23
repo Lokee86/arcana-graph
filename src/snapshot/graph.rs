@@ -63,7 +63,7 @@ impl GraphSnapshot {
     pub fn materialize_base_dataset(&self) -> Result<GraphDataset, QueryError> {
         let mut edges = Vec::with_capacity(self.manifest.base_edge_count as usize);
         for source in 0..self.base.node_count() {
-            for neighbor in self.base.forward_neighbors(NodeId(source))? {
+            for neighbor in self.base.forward_neighbors_iter(NodeId(source))? {
                 edges.push(Edge {
                     source: NodeId(source),
                     target: neighbor.node,

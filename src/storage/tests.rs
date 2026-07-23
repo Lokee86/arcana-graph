@@ -146,6 +146,38 @@ fn empty_adjacency_and_parallel_kinds_round_trip() {
 }
 
 #[test]
+fn borrowed_neighbor_iterator_matches_owned_api() {
+    let dataset = GraphDataset {
+        node_count: 4,
+        edges: vec![
+            Edge {
+                source: NodeId(0),
+                target: NodeId(1),
+                kind: EdgeKind(2),
+            },
+            Edge {
+                source: NodeId(0),
+                target: NodeId(2),
+                kind: EdgeKind(3),
+            },
+            Edge {
+                source: NodeId(3),
+                target: NodeId(0),
+                kind: EdgeKind(4),
+            },
+        ],
+    };
+    let path = TempPath::new("borrowed-neighbors");
+    write_packed(path.as_path(), &dataset).unwrap();
+    let packed = PackedGraph::open(path.as_path()).unwrap();
+
+    let forward: Vec<_> = packed.forward_neighbors_iter(NodeId(0)).unwrap().collect();
+    let reverse: Vec<_> = packed.reverse_neighbors_iter(NodeId(0)).unwrap().collect();
+    assert_eq!(forward, packed.forward_neighbors(NodeId(0)).unwrap());
+    assert_eq!(reverse, packed.reverse_neighbors(NodeId(0)).unwrap());
+}
+
+#[test]
 fn logical_edge_order_does_not_change_packed_bytes() {
     let dataset = generate(&topology_specs()[0]).expect("valid synthetic graph");
     let mut reordered = dataset.clone();

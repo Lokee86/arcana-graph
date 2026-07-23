@@ -93,6 +93,12 @@ impl RepositorySnapshot {
     pub const fn unresolved(&self) -> &RepositoryFacts {
         &self.unresolved
     }
+
+    /// Transfers the components needed by the query protocol without cloning them.
+    pub fn into_protocol_parts(self) -> (GraphSnapshot, RepositoryCatalogue, RepositoryFacts) {
+        (self.graph, self.catalogue, self.unresolved)
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }

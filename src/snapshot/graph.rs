@@ -81,11 +81,11 @@ impl GraphSnapshot {
     }
 
     pub fn forward_neighbors(&self, node: NodeId) -> Result<Vec<Neighbor>, QueryError> {
-        Ok(self.forward_neighbors_iter(node)?.collect())
+        self.neighbors_owned(node, Direction::Forward)
     }
 
     pub fn reverse_neighbors(&self, node: NodeId) -> Result<Vec<Neighbor>, QueryError> {
-        Ok(self.reverse_neighbors_iter(node)?.collect())
+        self.neighbors_owned(node, Direction::Reverse)
     }
 
     pub fn forward_neighbors_iter(
@@ -117,6 +117,21 @@ impl GraphSnapshot {
             node_count: self.base.node_count(),
             edges,
         })
+    }
+
+    fn neighbors_owned(
+        &self,
+        node: NodeId,
+        direction: Direction,
+    ) -> Result<Vec<Neighbor>, QueryError> {
+        let base_neighbors = match direction {
+            Direction::Forward => self.base.forward_neighbors(node)?,
+            Direction::Reverse => self.base.reverse_neighbors(node)?,
+        };
+        match &self.overlay {
+            Some(overlay) => Ok(overlay.merge_owned(direction, node, base_neighbors)),
+            None => Ok(base_neighbors),
+        }
     }
 
     fn neighbors_iter(

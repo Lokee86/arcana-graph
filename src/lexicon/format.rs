@@ -35,7 +35,7 @@ pub(super) struct FileEntry {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct FactObject {
+pub(super) struct JsonFactObject {
     pub(super) version: u64,
     pub(super) language: String,
     #[serde(default)]

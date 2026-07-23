@@ -6,9 +6,14 @@ use std::io;
 
 use crate::repository::{FactFileError, RepositoryFacts};
 
+mod binary;
 mod format;
+mod object;
+mod records;
 mod snapshot;
 
+#[cfg(test)]
+mod binary_tests;
 #[cfg(test)]
 mod tests;
 
@@ -98,6 +103,7 @@ pub struct LexiconPathChanges {
 pub enum LexiconSnapshotError {
     Io(io::Error),
     Json(serde_json::Error),
+    Binary(String),
     Facts(FactFileError),
     InvalidCurrent,
     InvalidId(String),
@@ -123,6 +129,7 @@ impl fmt::Display for LexiconSnapshotError {
         match self {
             Self::Io(error) => error.fmt(formatter),
             Self::Json(error) => write!(formatter, "Lexicon snapshot JSON is invalid: {error}"),
+            Self::Binary(error) => write!(formatter, "Lexicon binary object is invalid: {error}"),
             Self::Facts(error) => error.fmt(formatter),
             Self::InvalidCurrent => formatter.write_str("Lexicon CURRENT is invalid"),
             Self::InvalidId(id) => write!(formatter, "invalid Lexicon snapshot/object ID {id:?}"),

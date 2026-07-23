@@ -3,14 +3,16 @@ use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use super::format::{FactObject, LanguageEntry, Manifest};
+use super::binary::{is_binary_object, parse_binary_object};
+use super::format::{LanguageEntry, Manifest};
+use super::object::{FactObject, FactRecord, parse_json_object};
+use super::records::build_repository_facts;
 use super::{
     FACT_SCHEMA_VERSION, LexiconSnapshot, LexiconSnapshotError, OBJECT_VERSION, SNAPSHOT_VERSION,
 };
-use crate::repository::{RepositoryFacts, normalize_repository_path};
+use crate::repository::normalize_repository_path;
 
 const SNAPSHOT_DOMAIN: &str = "lexicon:snapshot:v1\0";
 const OBJECT_DOMAIN: &str = "lexicon:fact-object:v1\0";
@@ -29,7 +31,7 @@ pub fn current(root: impl AsRef<Path>) -> Result<LexiconSnapshot, LexiconSnapsho
 pub fn load(root: impl AsRef<Path>, id: &str) -> Result<LexiconSnapshot, LexiconSnapshotError> {
     validate_id(id)?;
     let storage = storage_root(root.as_ref());
-    let manifest_bytes = read_verified(
+    let manifest_bytes = read_verified_json(
         &storage
             .join("snapshots")
             .join(format!("{}.json", hex_id(id))),
@@ -49,9 +51,8 @@ pub fn load(root: impl AsRef<Path>, id: &str) -> Result<LexiconSnapshot, Lexicon
 
     let mut files = BTreeMap::new();
     let mut shared_objects = BTreeMap::new();
-    let mut all_records = Vec::new();
+    let mut all_records = Vec::<FactRecord>::new();
     let mut previous_language = None;
-    let mut header = None;
     for language in &manifest.languages {
         validate_language(language)?;
         if previous_language
@@ -62,17 +63,10 @@ pub fn load(root: impl AsRef<Path>, id: &str) -> Result<LexiconSnapshot, Lexicon
         }
         previous_language = Some(language.language.clone());
         shared_objects.insert(language.language.clone(), language.shared_object_id.clone());
-        if header.is_none() {
-            header = Some((
-                language.adapter_version.clone(),
-                language.language.clone(),
-                language.repository.clone(),
-            ));
-        }
         if let Some(object_id) = &language.shared_object_id {
             let object = read_object(&storage, object_id)?;
             validate_object(&object, language, None, None)?;
-            append_records(&mut all_records, object.records)?;
+            all_records.extend(object.records);
         }
         let mut previous_path = None;
         for file in &language.files {
@@ -97,60 +91,11 @@ pub fn load(root: impl AsRef<Path>, id: &str) -> Result<LexiconSnapshot, Lexicon
             validate_id(&file.content_id)?;
             let object = read_object(&storage, &file.object_id)?;
             validate_object(&object, language, Some(&path), Some(&file.content_id))?;
-            append_records(&mut all_records, object.records)?;
+            all_records.extend(object.records);
         }
     }
 
-    let facts = if all_records.is_empty() {
-        RepositoryFacts::default()
-    } else {
-        let (adapter, language, repository) = header.expect("manifest has a language");
-        let mut nodes = BTreeMap::<String, Value>::new();
-        let mut edges = Vec::new();
-        let mut unresolved = Vec::new();
-        for record in all_records {
-            match record.get("record").and_then(Value::as_str) {
-                Some("node") => {
-                    let id = record
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .ok_or(LexiconSnapshotError::Malformed("node identity"))?
-                        .to_owned();
-                    match nodes.get(&id) {
-                        Some(existing) if existing != &record => {
-                            return Err(LexiconSnapshotError::ConflictingNode(id));
-                        }
-                        Some(_) => {}
-                        None => {
-                            nodes.insert(id, record);
-                        }
-                    }
-                }
-                Some("edge") => edges.push(record),
-                Some("unresolved") => unresolved.push(record),
-                _ => return Err(LexiconSnapshotError::Malformed("fact object record")),
-            }
-        }
-        let mut input = format!(
-            "{{\"adapter_version\":{},\"language\":{},\"mode\":\"full\",\"record\":\"lexicon\",\"repository\":{},\"schema_version\":1}}\n",
-            json_string(&adapter)?,
-            json_string(&language)?,
-            json_string(&repository)?,
-        );
-        for record in nodes.into_values().chain(edges).chain(unresolved) {
-            input.push_str(&serde_json::to_string(&record)?);
-            input.push('\n');
-        }
-        let mut facts = RepositoryFacts::parse(&input)?;
-        facts.nodes.sort_unstable();
-        facts.nodes.dedup();
-        facts.edges.sort_unstable();
-        facts.edges.dedup();
-        facts.unresolved.sort_unstable();
-        facts.unresolved.dedup();
-        facts
-    };
-
+    let facts = build_repository_facts(all_records)?;
     Ok(LexiconSnapshot {
         id: id.to_owned(),
         facts,
@@ -184,8 +129,18 @@ fn read_object(storage: &Path, id: &str) -> Result<FactObject, LexiconSnapshotEr
         .join("objects")
         .join(&hex_id(id)[..2])
         .join(&hex_id(id)[2..]);
-    let bytes = read_verified(&path, id, OBJECT_DOMAIN, "fact object")?;
-    Ok(serde_json::from_slice(&bytes)?)
+    let bytes = fs::read(path)?;
+    let canonical = if is_binary_object(&bytes) {
+        bytes.as_slice()
+    } else {
+        bytes.trim_ascii()
+    };
+    verify_content(canonical, id, OBJECT_DOMAIN, "fact object")?;
+    if is_binary_object(canonical) {
+        parse_binary_object(canonical)
+    } else {
+        parse_json_object(canonical)
+    }
 }
 
 fn validate_object(
@@ -215,23 +170,14 @@ fn validate_object(
             }
         }
         (None, None) if object.owner.is_none() && object.source_content_id.is_none() => {}
-        _ => return Err(LexiconSnapshotError::MetadataMismatch("shared fact object")),
+        _ => {
+            return Err(LexiconSnapshotError::MetadataMismatch("shared fact object"));
+        }
     }
     Ok(())
 }
 
-fn append_records(
-    target: &mut Vec<Value>,
-    records: Vec<Value>,
-) -> Result<(), LexiconSnapshotError> {
-    if records.iter().any(|record| !record.is_object()) {
-        return Err(LexiconSnapshotError::Malformed("fact object records"));
-    }
-    target.extend(records);
-    Ok(())
-}
-
-fn read_verified(
+fn read_verified_json(
     path: &Path,
     expected: &str,
     domain: &str,
@@ -239,7 +185,17 @@ fn read_verified(
 ) -> Result<Vec<u8>, LexiconSnapshotError> {
     let bytes = fs::read(path)?;
     let canonical = bytes.trim_ascii();
-    let actual = digest(domain, canonical);
+    verify_content(canonical, expected, domain, kind)?;
+    Ok(canonical.to_vec())
+}
+
+fn verify_content(
+    bytes: &[u8],
+    expected: &str,
+    domain: &str,
+    kind: &'static str,
+) -> Result<(), LexiconSnapshotError> {
+    let actual = digest(domain, bytes);
     if actual != expected {
         return Err(LexiconSnapshotError::ContentHashMismatch {
             kind,
@@ -247,7 +203,7 @@ fn read_verified(
             actual,
         });
     }
-    Ok(canonical.to_vec())
+    Ok(())
 }
 
 fn normalize_path(field: &'static str, path: &str) -> Result<String, LexiconSnapshotError> {
@@ -292,8 +248,4 @@ fn digest(domain: &str, bytes: &[u8]) -> String {
         write!(output, "{byte:02x}").expect("writing to String cannot fail");
     }
     output
-}
-
-fn json_string(value: &str) -> Result<String, LexiconSnapshotError> {
-    Ok(serde_json::to_string(value)?)
 }

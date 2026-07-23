@@ -1,6 +1,6 @@
 # Lexicon ingestion boundary
 
-Arcana consumes Lexicon snapshot contract v1 and compacts its durable identities into a packed repository graph. The legacy complete JSONL importer remains available for migration and diagnostics, but snapshot synchronization is the primary integration boundary.
+Arcana consumes Lexicon snapshot contract v1 and compacts its durable identities into a packed repository graph. Binary v1 fact objects are the normal snapshot transport: Arcana verifies their exact content hashes, decodes their node, edge, and unresolved sections into typed records, and does not reconstruct JSONL. Legacy canonical JSON fact objects and the complete JSONL importer remain available for migration and diagnostics.
 
 ## Identity boundary
 
@@ -17,7 +17,7 @@ Arcana accepts the common Lexicon node and relation vocabulary, including:
 - conversions, implementations, inheritance, trait use, overrides, reads, writes, and annotations;
 - unresolved references with source spans and candidate metadata.
 
-Source spans are preserved in the catalogue and unresolved-reference store. Explicit file ownership drives Arcana's file-scoped replacement model. Arbitrary Lexicon `attributes` are currently ignored rather than persisted; adding a provenance sidecar later will not require changing graph identity.
+Source spans are preserved in the catalogue and unresolved-reference store. Explicit file ownership drives Arcana's file-scoped replacement model. Binary record attributes are length-prefixed, so Arcana can skip arbitrary Lexicon `attributes` without parsing or persisting them; adding a provenance sidecar later will not require changing graph identity.
 
 ## Snapshot synchronization
 

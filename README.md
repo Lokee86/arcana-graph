@@ -106,10 +106,11 @@ manifest last. The source snapshot remains untouched.
 
 ## Repository ingestion
 
-Arcana consumes Lexicon's immutable snapshot store and compiles its normalized
-facts into the same dense packed graph format used by its synthetic workloads.
-Language adapters live in the standalone Lexicon repository; Arcana does not
-own or ship parsers.
+Arcana consumes Lexicon's immutable snapshot store, verifies each content-addressed
+fact object, and decodes Lexicon binary v1 node, edge, and unresolved sections
+into typed repository facts without reconstructing JSONL. Legacy canonical JSON
+fact objects remain readable during migration. Language adapters live in the
+standalone Lexicon repository; Arcana does not own or ship language parsers.
 
 ### Lexicon synchronization
 

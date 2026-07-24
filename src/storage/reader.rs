@@ -122,30 +122,6 @@ impl Iterator for PackedNeighborIter<'_> {
 
 impl ExactSizeIterator for PackedNeighborIter<'_> {}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cloned_packed_graphs_share_immutable_backing_bytes() {
-        let layout = Layout::for_counts(0, 0).unwrap();
-        let bytes: Arc<[u8]> = vec![0; layout.file_len as usize].into();
-        let graph = PackedGraph {
-            bytes,
-            header: Header {
-                node_count: 0,
-                edge_count: 0,
-                dataset_checksum: 0,
-                payload_checksum: 0,
-                layout,
-            },
-        };
-        let clone = graph.clone();
-
-        assert!(Arc::ptr_eq(&graph.bytes, &clone.bytes));
-    }
-}
-
 fn validate_file(bytes: &[u8], header: Header) -> Result<(), PackedError> {
     let actual = bytes.len() as u64;
     if header.layout.file_len != actual {
@@ -307,4 +283,28 @@ fn read_node(bytes: &[u8], base: u64, index: u64) -> u32 {
 
 fn read_kind(bytes: &[u8], base: u64, index: u64) -> u16 {
     get_u16(bytes, (base + index * 2) as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cloned_packed_graphs_share_immutable_backing_bytes() {
+        let layout = Layout::for_counts(0, 0).unwrap();
+        let bytes: Arc<[u8]> = vec![0; layout.file_len as usize].into();
+        let graph = PackedGraph {
+            bytes,
+            header: Header {
+                node_count: 0,
+                edge_count: 0,
+                dataset_checksum: 0,
+                payload_checksum: 0,
+                layout,
+            },
+        };
+        let clone = graph.clone();
+
+        assert!(Arc::ptr_eq(&graph.bytes, &clone.bytes));
+    }
 }

@@ -37,7 +37,7 @@ impl RelationMask {
     pub(crate) fn relation_names(self) -> Vec<&'static str> {
         RELATION_ORDER
             .iter()
-            .filter(|relation| self.contains(*relation))
+            .filter(|relation| self.contains(relation))
             .map(RelationKind::as_str)
             .collect()
     }

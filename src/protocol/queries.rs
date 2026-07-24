@@ -159,10 +159,7 @@ impl ProtocolSnapshot {
                 .collect::<Vec<_>>()
         });
         let matches = source_matches
-            .map_or_else(
-                || self.unresolved.iter().collect::<Vec<_>>(),
-                |matches| matches,
-            )
+            .unwrap_or_else(|| self.unresolved.iter().collect::<Vec<_>>())
             .into_iter()
             .filter(|reference| source_key.is_none_or(|key| reference.source == key))
             .filter(|reference| {
